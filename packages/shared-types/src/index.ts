@@ -1,0 +1,8 @@
+export const roles = ['DISPATCHER', 'STORE_MANAGER', 'DRIVER', 'LOADER'] as const;
+export type Role = (typeof roles)[number];
+export const orderStatuses = ['CONFIRMED', 'PLANNED', 'DEFERRED', 'LOADING', 'OUT_FOR_DELIVERY', 'DELIVERED', 'RECEIPT_CONFIRMED'] as const;
+export type OrderStatus = (typeof orderStatuses)[number];
+export const tripStatuses = ['PLANNED', 'LOADING', 'READY', 'IN_PROGRESS', 'COMPLETED'] as const;
+export type TripStatus = (typeof tripStatuses)[number];
+export const syncStatuses = ['PENDING', 'SYNCING', 'SYNCED', 'FAILED'] as const;
+export type SyncStatus = (typeof syncStatuses)[number];
