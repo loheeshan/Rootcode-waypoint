@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "Waypoint Loader",
+    "slug": "waypoint-loader",
+    "scheme": "waypoint-loader",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "platforms": [
+      "ios",
+      "android"
+    ],
+    "plugins": [
+      "expo-router",
+      "expo-sqlite",
+      "expo-secure-store"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.waypoint.loader"
+    },
+    "android": {
+      "package": "com.waypoint.loader"
+    }
+  }
+}

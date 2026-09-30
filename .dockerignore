@@ -1,0 +1,14 @@
+.git
+**/node_modules
+**/.next
+**/.expo
+**/.venv
+**/__pycache__
+**/.env
+**/.env.*
+**/dist
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/coverage
+**/*.tsbuildinfo

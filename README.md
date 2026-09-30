@@ -1,0 +1,126 @@
+# Rootcode — Waypoint application foundation
+
+Monorepo boilerplate for the delivery operations application described in the supplied Rootcode Markdown pack. This is the **repository foundation**, not the completed hackathon MVP.
+
+## Included
+
+- Next.js App Router starter with `/dispatcher` and `/store` workspaces.
+- Separate Driver and Loader Expo Router apps, SQLite schema initialization, SecureStore token adapters, and network state display.
+- FastAPI application with liveness/readiness endpoints, PostgreSQL connection setup, Alembic configuration, and all nine backend module folders.
+- Five shared TypeScript packages, a credential-storage-free API client, matching status types, starter UI components and provisional design tokens.
+- pnpm and uv lockfiles, checks, GitHub Actions, Docker Compose, environment templates, and the original architecture/process documents.
+
+Authentication/RBAC, domain tables, migrations, business endpoints, optimization, seed imports, POD capture, offline outbox processing and end-to-end workflows are **not implemented**. Public starter pages contain no real data. `scripts/seed.py` and `scripts/validate-plan.py` intentionally exit with a clear message until implemented.
+
+## Structure
+
+```text
+Rootcode/
+├── apps/
+│   ├── web/                  # Dispatcher + Store Manager
+│   ├── driver-mobile/        # Expo native app
+│   ├── loader-mobile/        # Expo native app
+│   └── api/                  # FastAPI modular backend
+├── packages/
+│   ├── design-tokens/
+│   ├── web-ui/
+│   ├── mobile-ui/
+│   ├── api-contracts/
+│   └── shared-types/
+├── data/seed/
+├── scripts/
+├── docs/
+├── Main/                     # Original supplied reference documents
+├── .github/
+└── docker-compose.yml
+```
+
+## Prerequisites
+
+- Node.js 22 LTS (22.13 or newer) and **pnpm 10.34.6**.
+- Python 3.12 and uv **0.9.21 or newer** for local API development.
+- Docker Desktop running Linux containers for PostgreSQL/Compose.
+- Android Studio/emulator or an Expo-compatible physical device for native testing. Local iOS native builds require macOS/Xcode.
+
+Use the package manager version in `package.json`. With Corepack installed, `corepack pnpm` uses this version automatically. If plain `pnpm` resolves to a different version, use `corepack pnpm` for the commands below or install the pinned version with `npm install -g pnpm@10.34.6`. This repository does not change global Node/npm installations.
+
+## Start locally (PowerShell)
+
+```powershell
+Set-Location D:\Rootcode
+powershell -ExecutionPolicy Bypass -File .\scripts\setup.ps1
+corepack pnpm install --frozen-lockfile
+```
+
+The setup script only creates missing `.env` files. Set the same local database password in root `.env` and `apps/api/.env`. If you change `POSTGRES_PORT`, update it in both files. If you change the web port, update `CORS_ORIGINS` to match. Environment files are ignored by Git.
+
+Start PostgreSQL:
+
+```powershell
+docker compose up -d postgres
+```
+
+Terminal 1 — API:
+
+```powershell
+Set-Location D:\Rootcode\apps\api
+uv sync --frozen
+uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Terminal 2 — web:
+
+```powershell
+Set-Location D:\Rootcode
+corepack pnpm dev:web
+```
+
+Open [web](http://localhost:3000), [API docs](http://localhost:8000/docs), [liveness](http://localhost:8000/health), and [database readiness](http://localhost:8000/ready). Liveness works without a database; readiness returns 503 when PostgreSQL cannot be reached. The database starts empty; no demo accounts exist yet.
+
+Terminal 3 — Driver or Loader:
+
+```powershell
+Set-Location D:\Rootcode
+corepack pnpm dev:driver
+# In a separate terminal, if needed:
+corepack pnpm dev:loader
+```
+
+Driver uses port 8081; Loader uses 8082. Set each app's `EXPO_PUBLIC_API_URL` before connecting API features. Android emulator: `http://10.0.2.2:8000/api/v1`. Physical phone: `http://YOUR_PC_LAN_IP:8000/api/v1`, with PC and phone on the same network. Restart Metro after changing environment values. The initial screen does not make an API request. Test native storage on a device; browser storage is not used.
+
+## Run the container stack
+
+After creating root `.env` and starting Docker Desktop:
+
+```powershell
+docker compose up --build
+```
+
+This starts PostgreSQL, FastAPI and the web app. Mobile apps run separately. The Compose configuration is for local development; the web's API URL is compiled at build time. `docker compose down` preserves the named database volume. There is no automatic migration or seed step until domain tables are added.
+
+## Checks
+
+```powershell
+corepack pnpm check
+corepack pnpm export:mobile
+Set-Location apps\api
+uv run ruff check .
+uv run mypy app
+uv run pytest
+```
+
+`pnpm build` builds the web app. `pnpm export:mobile` bundles Android and iOS JavaScript for both apps; it does not produce APK/IPA binaries. Root tests cover the shared client, and API tests cover health, readiness, and CORS. Add feature tests as each workflow is implemented.
+
+## Next implementation branches
+
+Follow [CONTRIBUTING.md](CONTRIBUTING.md) and [the commit plan](docs/process/COMMIT-PLAN.md): approved design tokens/components, API schemas, database models and migrations, authentication/role guards, then role workflows. Import new models in `apps/api/migrations/env.py` before running `uv run alembic revision --autogenerate -m "description"` and review the generated migration before `uv run alembic upgrade head`.
+
+The canonical architecture is in [docs/architecture](docs/architecture/SYSTEM-ARCHITECTURE.md). Original `Main/` documents are retained as references; detailed role screens there and in `docs/roles` describe future implementation, not completed functionality. Starter token values are not claimed to match Figma.
+
+## GitHub setup
+
+Follow [GITHUB-SETUP.md](docs/process/GITHUB-SETUP.md). No GitHub repository, remote, push, branch protection, or release is created automatically. `main` and `dev` are bootstrap branches; application files are committed on `chore/repository-foundation` for review into `dev`.
+
+## Dependency references
+
+The native dependencies use the [Expo SDK 56 compatibility set](https://docs.expo.dev/versions/v56.0.0/) and the web uses the [Next.js App Router](https://nextjs.org/docs/app/getting-started/installation). Exact resolved dependencies are recorded in the lockfiles.
