@@ -1,0 +1,43 @@
+name: CI
+on:
+  pull_request:
+    branches: [dev, main]
+  push:
+    branches: [main, dev, 'chore/**', 'codex/**', 'feature/**', 'fix/**', 'test/**', 'refactor/**', 'docs/**']
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  clients:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - run: pnpm export:mobile
+        env:
+          EXPO_PUBLIC_API_URL: http://localhost:8000/api/v1
+          CI: '1'
+  api:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.9.21'
+          python-version: '3.12'
+          enable-cache: true
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run mypy app
+      - run: uv run pytest

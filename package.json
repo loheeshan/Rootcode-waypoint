@@ -1,0 +1,32 @@
+{
+  "name": "rootcode-waypoint",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.34.6",
+  "engines": {
+    "node": ">=22.13.0 <23",
+    "pnpm": ">=10 <11"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @waypoint/web dev",
+    "dev:web": "pnpm --filter @waypoint/web dev",
+    "dev:driver": "pnpm --filter @waypoint/driver-mobile start",
+    "dev:loader": "pnpm --filter @waypoint/loader-mobile start",
+    "lint": "eslint .",
+    "typecheck": "pnpm -r typecheck",
+    "test": "vitest run",
+    "build": "pnpm --filter @waypoint/web build",
+    "export:mobile": "pnpm --filter @waypoint/driver-mobile export && pnpm --filter @waypoint/loader-mobile export",
+    "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
+  },
+  "devDependencies": {
+    "pnpm": "10.34.6",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "eslint": "^9.39.0",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.57.0",
+    "vitest": "3.2.7"
+  }
+}

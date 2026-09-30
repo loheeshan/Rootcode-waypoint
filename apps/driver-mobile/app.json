@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "Waypoint Driver",
+    "slug": "waypoint-driver",
+    "scheme": "waypoint-driver",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "platforms": [
+      "ios",
+      "android"
+    ],
+    "plugins": [
+      "expo-router",
+      "expo-sqlite",
+      "expo-secure-store"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.waypoint.driver"
+    },
+    "android": {
+      "package": "com.waypoint.driver"
+    }
+  }
+}
