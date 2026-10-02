@@ -1,10 +1,15 @@
+import type { ComponentProps } from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
-import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
+import { Tabs } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { S } from "../theme/syncColors";
 
-type IconName = React.ComponentProps<typeof MaterialCommunityIcons>["name"];
+type IconName = ComponentProps<typeof MaterialCommunityIcons>["name"];
+
+type TabBarProps = Parameters<
+  NonNullable<ComponentProps<typeof Tabs>["tabBar"]>
+>[0];
 
 const TABS: Record<string, { label: string; icon: IconName }> = {
   today: { label: "Today", icon: "truck-outline" },
@@ -13,7 +18,7 @@ const TABS: Record<string, { label: string; icon: IconName }> = {
   profile: { label: "Profile", icon: "account-outline" },
 };
 
-export function AppTabBar({ state, navigation }: BottomTabBarProps) {
+export function AppTabBar({ state, navigation }: TabBarProps) {
   const insets = useSafeAreaInsets();
   const pendingCount = 1;
 
@@ -22,7 +27,11 @@ export function AppTabBar({ state, navigation }: BottomTabBarProps) {
       {state.routes.map((route, index) => {
         const tab = TABS[route.name];
         if (!tab) return null;
-        const focused = state.index === index;
+        const routeFocused = state.index === index;
+        const activeName = state.routes[state.index].name;
+        const focused =
+          activeName === route.name ||
+          (route.name === "stops" && activeName === "could-not-deliver");
 
         const onPress = () => {
           const event = navigation.emit({
@@ -30,7 +39,7 @@ export function AppTabBar({ state, navigation }: BottomTabBarProps) {
             target: route.key,
             canPreventDefault: true,
           });
-          if (!focused && !event.defaultPrevented) {
+          if (!routeFocused && !event.defaultPrevented) {
             navigation.navigate(route.name, route.params);
           }
         };
