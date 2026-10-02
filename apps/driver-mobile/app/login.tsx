@@ -1,10 +1,15 @@
-import { Text, View } from 'react-native';
+import { LoginScreen } from "../src/features/login/components/LoginScreen";
 
-// Placeholder so the splash has somewhere to navigate. Replace with the real Login screen.
 export default function Login() {
   return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-      <Text>Login (coming next)</Text>
-    </View>
+    <LoginScreen
+      onSubmit={(driverId, pin, remember) => {
+        // TODO(feature/driver-api-integration): call auth API, store token, route to Today's Trips
+        console.log("login submit", { driverId, remember });
+      }}
+      onBiometric={() => console.log("biometric")}
+      onNfc={() => console.log("nfc")}
+      onForgotPin={() => console.log("forgot pin")}
+    />
   );
 }
