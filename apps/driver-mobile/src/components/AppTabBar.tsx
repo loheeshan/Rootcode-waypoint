@@ -18,6 +18,8 @@ const TABS: Record<string, { label: string; icon: IconName }> = {
   profile: { label: "Profile", icon: "account-outline" },
 };
 
+const STOPS_CHILDREN = ["record-delivery", "could-not-deliver"];
+
 export function AppTabBar({ state, navigation }: TabBarProps) {
   const insets = useSafeAreaInsets();
   const pendingCount = 1;
@@ -31,7 +33,7 @@ export function AppTabBar({ state, navigation }: TabBarProps) {
         const activeName = state.routes[state.index].name;
         const focused =
           activeName === route.name ||
-          (route.name === "stops" && activeName === "could-not-deliver");
+          (route.name === "stops" && STOPS_CHILDREN.includes(activeName));
 
         const onPress = () => {
           const event = navigation.emit({

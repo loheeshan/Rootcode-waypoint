@@ -1,18 +1,19 @@
 import { useRouter } from "expo-router";
-import { DeliveryScreen } from "../../src/features/delivery/DeliveryScreen";
-import { mockStop } from "../../src/features/delivery/mockData";
+import { TripScreen } from "../../src/features/trip/TripScreen";
+import { mockTrip } from "../../src/features/trip/mockData";
 
 export default function Stops() {
   const router = useRouter();
 
   return (
-    <DeliveryScreen
-      data={mockStop}
-      onComplete={(payload) => {
-        // TODO(feature/driver-sqlite + driver-sync): save to SQLite, queue outbox event, go to POD capture
-        console.log("complete delivery", payload);
+    <TripScreen
+      data={mockTrip}
+      onContinue={() => router.push("/record-delivery")}
+      onStopPress={(stop) => {
+        // TODO: open a read-only stop detail for finished stops
+        if (stop.status === "current") router.push("/record-delivery");
+        else console.log("open stop", stop.id);
       }}
-      onCantDeliver={() => router.push("/could-not-deliver")}
     />
   );
 }
