@@ -8,10 +8,10 @@ export default function Stops() {
   return (
     <TripScreen
       data={mockTrip}
-      onContinue={() => router.push("/record-delivery")}
+      onContinue={() => router.push("/next-stop")}
       onStopPress={(stop) => {
         // TODO: open a read-only stop detail for finished stops
-        if (stop.status === "current") router.push("/record-delivery");
+        if (stop.status === "current") router.push("/next-stop");
         else console.log("open stop", stop.id);
       }}
     />
