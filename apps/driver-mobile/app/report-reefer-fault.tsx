@@ -22,7 +22,8 @@ export default function ReportReeferFaultScreen() {
     // 1. save to SQLite  2. update UI  3. queue outbox event  4. sync later
     // TODO(feature/driver-sqlite, feature/driver-sync):
     //   await outbox.enqueue({ type: 'REEFER_FAULT_REPORTED', vehicleId, reportedAt: new Date().toISOString() });
-    leave();
+    setVisible(false);
+    router.replace('/vehicle-issue-reported');
   };
 
   return (
