@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { SplashScreen } from '../src/features/splash/SplashScreen';
 import { useBootstrap } from '../src/features/splash/useBootstrap';
 
@@ -12,10 +12,12 @@ export default function Index() {
   }, [destination, router]);
 
   return (
-    <SplashScreen
-      progress={progress}
-      statusText={statusText}
-      cachedOutlets={cachedOutlets}
-    />
+    // <SplashScreen
+    //   progress={progress}
+    //   statusText={statusText}
+    //   cachedOutlets={cachedOutlets}
+    // />
+    //<Redirect href="/start-trip" />
+    <Redirect href="/navigate-outlet" />
   );
 }
