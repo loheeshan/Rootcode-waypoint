@@ -18,6 +18,7 @@ export default function Index() {
     //   cachedOutlets={cachedOutlets}
     // />
     //<Redirect href="/start-trip" />
-    <Redirect href="/navigate-outlet" />
+    //<Redirect href="/navigate-outlet" />
+    <Redirect href="/stops/navigation-preview" />
   );
 }

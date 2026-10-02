@@ -13,7 +13,7 @@ export default function NavigateOutletScreen() {
 
   const handleConfirm = () => {
     setVisible(false);
-    router.replace('/navigation-preview');
+    router.replace('/stops/navigation-preview');
   };
 
   const handleCancel = () => {

@@ -1,17 +1,28 @@
 import { Tabs } from "expo-router";
 import { AppTabBar } from "../../src/components/AppTabBar";
+import { DriverTabBar } from "../../src/components/DriverTabBar";
+
+// Screens that use the OLD AppTabBar. All others use DriverTabBar.
+const APP_TAB_ROUTES = ["sync"];
 
 export default function TabsLayout() {
   return (
     <Tabs
       initialRouteName="sync"
-      tabBar={(props) => <AppTabBar{...props} />}
+      tabBar={(props) => {
+        const current = props.state.routes[props.state.index]?.name;
+        return APP_TAB_ROUTES.includes(current) ? (
+          <AppTabBar {...props} />
+        ) : (
+          <DriverTabBar {...(props as any)} />
+        );
+      }}
       screenOptions={{ headerShown: false }}
     >
-      <Tabs.Screen name="today" />
-      <Tabs.Screen name="stops" />
-      <Tabs.Screen name="sync" />
-      <Tabs.Screen name="profile" />
+      <Tabs.Screen name="today" options={{ title: "Today" }} />
+      <Tabs.Screen name="stops" options={{ title: "Stops" }} />
+      <Tabs.Screen name="sync" options={{ title: "Sync" }} />
+      <Tabs.Screen name="profile" options={{ title: "Profile" }} />
       <Tabs.Screen name="could-not-deliver" options={{ href: null }} />
       <Tabs.Screen name="record-delivery" options={{ href: null }} />
     </Tabs>
