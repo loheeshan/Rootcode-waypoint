@@ -10,6 +10,8 @@ type Props = {
   cancelLabel?: string;
   onConfirm: () => void;
   onCancel: () => void;
+  /** Called by the × button and the Android back button. Defaults to onCancel. */
+  onClose?: () => void;
 };
 
 export function ConfirmModal({
@@ -20,13 +22,16 @@ export function ConfirmModal({
   cancelLabel = 'Cancel',
   onConfirm,
   onCancel,
+  onClose,
 }: Props) {
+  const handleClose = onClose ?? onCancel;
+
   return (
     <Modal
       visible={visible}
       transparent
       animationType="fade"
-      onRequestClose={onCancel}
+      onRequestClose={handleClose} // CHANGED
       statusBarTranslucent
     >
       <View style={styles.overlay}>
@@ -36,7 +41,7 @@ export function ConfirmModal({
               {title}
             </Text>
             <Pressable
-              onPress={onCancel}
+              onPress={handleClose} // CHANGED
               style={styles.closeButton}
               accessibilityRole="button"
               accessibilityLabel="Close"
