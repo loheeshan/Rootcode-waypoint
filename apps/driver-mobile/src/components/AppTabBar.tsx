@@ -15,6 +15,7 @@ const TABS: Record<string, { label: string; icon: IconName }> = {
 
 export function AppTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
+  const pendingCount = 1;
 
   return (
     <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 10) }]}>
@@ -43,11 +44,16 @@ export function AppTabBar({ state, navigation }: BottomTabBarProps) {
             accessibilityState={{ selected: focused }}
           >
             <View style={[styles.pill, focused && styles.pillActive]}>
-              <MaterialCommunityIcons
-                name={tab.icon}
-                size={22}
-                color={focused ? "#fff" : "#8C97C4"}
-              />
+              <View>
+                <MaterialCommunityIcons
+                  name={tab.icon}
+                  size={22}
+                  color={focused ? "#fff" : "#8C97C4"}
+                />
+                {route.name === "sync" && pendingCount > 0 && !focused ? (
+                  <View style={styles.badgeDot} />
+                ) : null}
+              </View>
               <Text style={[styles.label, { color: focused ? "#fff" : "#8C97C4" }]}>
                 {tab.label}
               </Text>
@@ -77,4 +83,13 @@ const styles = StyleSheet.create({
   },
   pillActive: { backgroundColor: S.primary },
   label: { fontSize: 11, fontWeight: "700" },
+  badgeDot: {
+    position: "absolute",
+    top: -2,
+    right: -4,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: S.amber,
+  },
 });
