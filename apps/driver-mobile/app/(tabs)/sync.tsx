@@ -1,5 +1,7 @@
 import { SyncScreen } from "../../src/features/sync/SyncScreen";
 import { mockSync } from "../../src/features/sync/mockData";
+import { Text, View } from 'react-native';
+
 
 export default function Sync() {
   return (
@@ -10,5 +12,10 @@ export default function Sync() {
         console.log("retry sync");
       }}
     />
+  );
+  return (
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+      <Text>Sync (coming soon)</Text>
+    </View>
   );
 }
