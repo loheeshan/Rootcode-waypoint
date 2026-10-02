@@ -11,10 +11,10 @@ import {
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { L } from "../../theme/loginColors";
-import { LoginHeader } from "./components/LoginHeader";
-import { LabeledField } from "./components/LabeledField";
-import { VehicleCard } from "./components/VehicleCard";
+import { L } from "../../../theme/loginColors";
+import { LoginHeader } from "./LoginHeader";
+import { LabeledField } from "./LabeledField";
+import { VehicleCard } from "./VehicleCard";
 
 type Props = {
   onSubmit: (driverId: string, pin: string, remember: boolean) => void;

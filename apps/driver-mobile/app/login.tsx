@@ -1,4 +1,4 @@
-import { LoginScreen } from "../src/features/login/LoginScreen";
+import { LoginScreen } from "../src/features/login/components/LoginScreen";
 
 export default function Login() {
   return (
