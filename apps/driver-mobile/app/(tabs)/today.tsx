@@ -1,10 +1,14 @@
-import { PlaceholderScreen } from "../../src/components/PlaceholderScreen";
-import { Text, View } from 'react-native';
+import { useRouter } from "expo-router";
+import { TodayScreen } from "../../src/features/today/TodayScreen";
+import { mockToday } from "../../src/features/today/mockData";
 
 export default function Today() {
-  return <PlaceholderScreen title="Today" />;
+  const router = useRouter();
+
   return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-      <Text>Today (coming soon)</Text>
-    </View>);
+    <TodayScreen
+      data={mockToday}
+      onViewStops={() => router.navigate("/stops")}
+    />
+  );
 }
