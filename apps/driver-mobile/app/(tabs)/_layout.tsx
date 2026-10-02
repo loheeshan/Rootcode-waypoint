@@ -13,6 +13,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="sync" />
       <Tabs.Screen name="profile" />
       <Tabs.Screen name="could-not-deliver" options={{ href: null }} />
+      <Tabs.Screen name="record-delivery" options={{ href: null }} />
     </Tabs>
   );
 }
