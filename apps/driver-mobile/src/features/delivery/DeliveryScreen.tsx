@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { View, ScrollView, StyleSheet } from "react-native";
 import { StatusBar } from "expo-status-bar";
-import { D } from "../../theme/deliveryColors";
+import { D } from "../../theme/deliveryColor";
 import {
   DeliveryOutcome,
   DeliveryPayload,
@@ -9,7 +9,7 @@ import {
   StopDeliverySnapshot,
 } from "./types";
 import { DeliveryHeader } from "./components/DeliveryHeader";
-import { TelemetryCard } from "./components/TelemetryCard";
+import { TelemetryCard } from "./components/TelementryCard";
 import { OutcomeToggle } from "./components/OutcomeToggle";
 import { ManifestChecklist } from "./components/ManifestChecklist";
 import { CompleteBar } from "./components/CompleteBar";
