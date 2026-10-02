@@ -22,10 +22,11 @@ export default function ChangeVehicleScreen() {
     else router.replace('/profile');
   };
 
-  const handleRequest = () => {
-    // TODO(feature/driver-api-integration): send the assignment request to the API.
-    // Offline rule: save locally, queue an outbox event, sync later.
-    leave();
+    const handleRequest = () => {
+        // TODO(feature/driver-api-integration): send the assignment request to the API.
+        // Offline rule: save locally, queue an outbox event, sync later.
+    setVisible(false);
+    router.replace('/assignment-sent');
   };
 
   return (
