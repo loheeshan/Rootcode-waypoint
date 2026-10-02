@@ -8,7 +8,7 @@ const APP_TAB_ROUTES = ["sync"];
 export default function TabsLayout() {
   return (
     <Tabs
-      initialRouteName="sync"
+      initialRouteName="today"
       tabBar={(props) => {
         const current = props.state.routes[props.state.index]?.name;
         return APP_TAB_ROUTES.includes(current) ? (
