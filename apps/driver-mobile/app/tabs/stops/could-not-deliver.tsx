@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
 import { colors, spacing, radius } from '../../../src/theme/colors';
-import { Badge } from '../../../src/components/';
+import { Badge } from '../../../src/components/ui/Badge';
 import { OfflineBanner } from '../../../src/components/ui/OfflineBanner';
 import { AppButton } from '../../../src/components/ui/Button';
 
