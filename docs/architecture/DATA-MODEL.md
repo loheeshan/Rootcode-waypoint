@@ -175,8 +175,9 @@ operational limit across alternative published revisions or depot plans. The
 future publisher must enforce the effective revision, complete-day limits,
 home-depot compatibility, driver authorization and planning constraints.
 Published revision immutability is not enforced by these storage checks; future
-services must prohibit edits and create new revisions. No planning routes are
-mounted yet, so the tables do not expose a public bypass for these checks.
+services must prohibit edits and create new revisions. The plan API creates a
+draft plan with its initial empty revision atomically and reads metadata/counts;
+it cannot edit existing revisions, allocate orders, or publish data.
 
 See the [planning migration guide](../../apps/api/app/planning/README.md).
 Downgrading from `0005` to `0004_user_scopes` drops these four foundation tables;
@@ -220,8 +221,10 @@ written. Future atomic result writing/publishing must require every deferred
 result's reason and cover every selected order exactly once. These constraints
 provide at-most-one outcome, not complete coverage, depot/date eligibility,
 physical feasibility, current-publication selection or immutable published data.
-No planning mutation API is mounted yet. Shared types export `AssignmentOutcome`
-and `DeferralReason`; public planning response DTOs remain future work.
+The public plan API creates only draft workspaces; it cannot mutate outcomes.
+Shared types export `AssignmentOutcome` and `DeferralReason`. Plan detail returns
+per-revision saved counts, including deferred results missing reasons, without
+claiming coverage or feasibility. Full allocation result DTOs remain future work.
 
 Downgrading to `0005_planning_foundation` drops only the two outcome tables and
 three supporting parent indexes; all 13 earlier tables and records remain.

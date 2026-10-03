@@ -9,6 +9,7 @@ from app.fleet.router import router as fleet_router
 from app.health import router as health_router
 from app.orders.dispatcher_router import router as dispatcher_orders_router
 from app.orders.router import router as store_orders_router
+from app.planning.router import router as plans_router
 
 
 def create_app() -> FastAPI:
@@ -20,6 +21,7 @@ def create_app() -> FastAPI:
         allow_credentials=False,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "Idempotency-Key"],
+        expose_headers=["Location"],
     )
     application.include_router(health_router)
     application.include_router(health_router, prefix="/api/v1")
@@ -27,6 +29,7 @@ def create_app() -> FastAPI:
     application.include_router(store_orders_router, prefix="/api/v1")
     application.include_router(dispatcher_orders_router, prefix="/api/v1")
     application.include_router(fleet_router, prefix="/api/v1")
+    application.include_router(plans_router, prefix="/api/v1")
 
     @application.exception_handler(RequestValidationError)
     async def validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:

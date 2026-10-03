@@ -2,11 +2,11 @@
 
 ## Implementation status
 
-Authentication, Store order create/list/detail, Dispatcher order listing and
-fleet read routes are implemented. Store receipt, planning, live operations,
-Loader and Driver business routes remain planned.
+Authentication, Store order create/list/detail, Dispatcher order listing, fleet
+reads, and plan create/list/detail routes are implemented. Store receipt,
+optimization, publishing, live operations, Loader and Driver routes remain planned.
 Migration `0005_planning_foundation` adds storage for plans, revisions, trips and
-stops; it does not mount planning routes or implement allocation/publishing.
+stops. Plan workspace APIs now use this storage; allocation/publishing remain pending.
 Migration `0006_plan_outcomes` adds order result and deferral reason storage,
 without new routes or changes to existing order JSON/status behavior.
 The API also exposes `GET /health`,
@@ -203,14 +203,15 @@ increments. Shared types are `OrderCreateRequest`, `OrderResponse`,
 GET  /api/v1/dispatcher/orders
 GET  /api/v1/fleet
 POST /api/v1/plans
+GET  /api/v1/plans
 POST /api/v1/plans/{plan_id}/optimize
 GET  /api/v1/plans/{plan_id}
 POST /api/v1/plans/{plan_id}/publish
 GET  /api/v1/operations/live
 ```
 
-The first two routes are implemented and require bearer authentication plus
-`DISPATCHER`. Both use current `UserDepot` assignments in SQL before counting or
+Order/fleet reads and plan create/list/detail require bearer authentication plus
+`DISPATCHER`. Collection reads use current `UserDepot` assignments before counting or
 paginating. Dispatcher access to orders follows each outlet's current depot;
 Store `UserOutlet` assignments do not widen Dispatcher access. Other roles cannot
 use these routes, even with a depot grant. No role bypass or all-depot access is
@@ -304,8 +305,105 @@ Order read failures return `{"detail":"Orders unavailable"}`; fleet failures
 return `{"detail":"Fleet unavailable"}`, without SQL/connection details.
 The new shared types are `DepotResponse`, `OutletResponse`, `VehicleResponse`,
 `FleetListResponse`, `DispatcherOrderResponse` and `DispatcherOrderListResponse`.
-No database migration is needed. Planning/publishing/live operations and
-frontend screen integration remain future increments.
+The read APIs need no additional migration. Optimization, publishing, live
+operations and frontend screen integration remain future increments.
+
+### Plan workspaces
+
+`POST /api/v1/plans` accepts only:
+
+```json
+{"depot_id":"<UUID from /me depot_ids>","delivery_date":"2026-10-05"}
+```
+
+The delivery date must be a `YYYY-MM-DD` string for today or a future date in
+`Asia/Colombo`. Unlike Store submission, creating a planning workspace does not
+apply the Store cutoff or move the date. Past dates return 422. Reading existing
+historical plans is permitted. The depot must be assigned to the Dispatcher;
+unknown/unassigned depots return 403. IDs, creator, statuses and revision numbers
+are server-owned; extra fields are rejected.
+
+A successful request commits a `DRAFT` plan and its empty `DRAFT` revision 1 in
+one transaction. It returns 201 with `Location: /api/v1/plans/<id>` and the same
+detail shape as `GET /api/v1/plans/{plan_id}`:
+
+```json
+{
+  "id": "<plan UUID>",
+  "depot_id": "<assigned depot UUID>",
+  "delivery_date": "2026-10-05",
+  "status": "DRAFT",
+  "created_by": "<authenticated user UUID>",
+  "created_at": "2026-10-03T10:30:00Z",
+  "revisions": [{
+    "id": "<revision UUID>",
+    "revision_number": 1,
+    "status": "DRAFT",
+    "published_at": null,
+    "trip_count": 0,
+    "served_order_count": 0,
+    "deferred_order_count": 0,
+    "unexplained_deferred_count": 0
+  }]
+}
+```
+
+No orders, trips or outcomes are created/updated by this request. A duplicate
+valid depot/date request returns 409 with
+`{"detail":"A plan already exists for this depot and delivery date"}` and a
+`Location` for the existing accessible plan. This also handles concurrent creates
+using the database unique constraint. Existing statuses/revisions are preserved;
+the request does not add a revision or overwrite a published plan. On 409, clients
+can follow `Location` or find the plan with the list filters below. Approved CORS
+origins can read the `Location` response header. Generic idempotency keys are not
+implemented; the unique depot/date pair prevents duplicate workspaces.
+
+`GET /api/v1/plans` supports optional `depot_id`, `delivery_date` and `status`
+(`DRAFT`/`PUBLISHED`) filters. Filters combine with AND. Pagination uses `limit`
+(default 20, range 1–100) and `offset` (default 0, nonnegative). It returns
+`{"items":[<plan metadata>],"total":1,"limit":20,"offset":0}`. Each item contains
+the six plan fields above, without `revisions`. Rows sort by delivery date
+descending, then UUID descending. Totals and pages are restricted in SQL to
+current depot assignments. No assignments/no matches produce an empty list.
+An explicit unknown/unassigned depot filter returns 403. Pages can shift when
+new plans arrive; a filter on status uses the stored plan summary status.
+
+`GET /api/v1/plans/{plan_id}` returns metadata and all saved revision summaries,
+sorted by revision number ascending. Missing plans and plans outside current
+depot assignments both return `404 {"detail":"Plan not found"}`. Any Dispatcher
+assigned to the depot can read its plans, regardless of the original creator.
+Revoking depot/role access takes effect on the next request. Preexisting plans
+without revisions return `revisions: []`; new API creations always include revision 1.
+
+Revision counts describe stored rows for that revision. Served/deferred counts
+count assignments, not stops; `unexplained_deferred_count` counts deferred results
+without a reason. Separate aggregates prevent trips from multiplying outcome
+counts. These are **not** a feasibility check or proof that all selected orders
+are covered. The endpoint does not select an effective published revision or
+return full trip/stop/order results. Timestamps are UTC; `published_at` is nullable.
+Optimization, result details, revision creation/editing and publishing are later
+increments. A `PUBLISHED` value read from storage is not a new validation verdict.
+
+All successful responses and 404/409/503 errors use `Cache-Control: no-store`.
+
+| Status | Meaning |
+|---|---|
+| 401 | Missing/invalid token or inactive user |
+| 403 | Wrong role or unassigned create/list-filter depot |
+| 404 | Detail plan missing or outside current depot scope |
+| 409 | Existing depot/date plan, or another insert integrity conflict |
+| 422 | Invalid fields/query/path or a past creation date |
+| 503 | Authentication or planning database operation unavailable |
+
+Other insert conflicts return `{"detail":"Plan could not be created; refresh depot access"}`
+without `Location`; database failures return `{"detail":"Plans unavailable"}` without
+connection/SQL details. Failed inserts or commits roll back both plan and revision.
+The past-date error is `{"detail":"Delivery date cannot be before today in Asia/Colombo"}`.
+Field validation uses the existing sanitized 422 format.
+
+Shared types: `PlanCreateRequest`, `PlanResponse`, `PlanRevisionResponse`,
+`PlanDetailResponse`, `PlanListResponse`. This increment adds no migration;
+existing head `0006_plan_outcomes` is required for revision counts.
 
 ## Loader
 
@@ -348,7 +446,7 @@ IN_PROGRESS
 COMPLETED
 ```
 
-Plan/revision storage (no planning API yet):
+Plan/revision:
 ```text
 DRAFT
 PUBLISHED
@@ -364,7 +462,7 @@ FAILED
 
 `PlanStatus` and `StopStatus` join `TripStatus` in shared types and are re-exported
 by `@waypoint/api-contracts`. These enums specify stored values, not permission
-to perform a transition. Planning response DTOs will be defined with the routes.
+to perform a transition. Plan workspace response DTOs are defined above.
 
 Planning outcome storage exports `AssignmentOutcome` (`SERVED` or `DEFERRED`)
 and `DeferralReason` from shared types and re-exports them via the API contract

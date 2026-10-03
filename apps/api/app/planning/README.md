@@ -9,8 +9,8 @@
 
 `assignment_models.py` and migration `0006_plan_outcomes` add `plan_assignments`
 and `deferral_decisions`. All six models are registered in `app/db/models.py`.
-No planning endpoints are mounted yet. Allocation, authorization and publishing
-services remain separate increments.
+Dispatcher plan create/list/detail endpoints are implemented with depot scope
+checks. Allocation and publishing services remain separate increments.
 
 ## Storage decisions
 
@@ -48,7 +48,8 @@ relationships preserve that behavior even with children loaded. Explicitly
 deleting children before parents remains possible in trusted database code.
 These constraints protect references; they do not make published data immutable.
 Future publish/edit services must enforce immutable published revisions and new
-revision creation for edits. No public API can write these records yet.
+revision creation for edits. The current API can only create a new draft plan
+with its initial empty revision; it cannot edit existing plans or outcomes.
 
 ## Order assignments and deferrals
 
@@ -104,7 +105,45 @@ atomic result writer/publisher must require one explanation for every deferred
 order and exactly one result for every selected order. The database guarantees
 **at most one**, not complete coverage. Depot/date eligibility, physical planning
 constraints, current publication selection, and published immutability still
-require validation. No results are seeded or exposed through new public routes.
+require validation. No results are seeded. Plan detail exposes saved result
+counts, not full assignments, stops, reason text or a validation verdict.
+
+## Plan workspace API
+
+- `POST /api/v1/plans`: accepts `depot_id` and `delivery_date`, creates a draft
+  plan and revision 1 atomically, then returns 201 with a detail response.
+- `GET /api/v1/plans`: depot-scoped discovery with optional depot/date/status
+  filters and `limit`/`offset` pagination.
+- `GET /api/v1/plans/{plan_id}`: metadata and revision history, including stored
+  trip, served, deferred and unexplained-deferred counts per revision.
+
+All require an active `DISPATCHER` bearer token. Any Dispatcher with the current
+depot assignment may read the plan; the original creator is not a special access
+boundary. Collections/totals and detail roots are scoped in SQL. Foreign and
+missing plan IDs both return 404; create/explicit depot filters require a grant.
+
+Use today or a future `YYYY-MM-DD` date in Asia/Colombo. Creating a plan does not
+apply the Store cutoff or allocate orders. The server sets creator, statuses,
+IDs and initial revision number. Extra/server-owned request fields are rejected.
+A valid duplicate depot/date request returns 409 and the existing plan's Location,
+including for concurrent requests. It never overwrites or adds revisions. CORS
+exposes Location to the configured web origins. Other integrity failures return
+a generic 409; database failures return a sanitized 503. Failed writes roll back.
+
+Lists sort by delivery date then UUID descending; revisions by number ascending.
+Counts use independent grouped queries to avoid multiplying trips and orders.
+They report saved rows, not all selected orders or physical planning feasibility.
+Detail permits historical plans and preexisting plans with no revisions. All
+response timestamps are UTC and successful responses use `Cache-Control: no-store`.
+
+After the demo seeds, authorize in `/docs` as `dispatcher@waypoint.demo`, take
+`depot_ids[0]` from `/me`, and create a plan for the accepted delivery date from a
+Store order. List and open the returned plan ID; revision 1 should be empty and
+draft. A second identical request should return 409 pointing to that plan.
+No new migration is needed; keep the existing `0006_plan_outcomes` head applied.
+Tests in `tests/test_plans_api.py` cover scope/role revocation, concurrent creation,
+atomic failures, filtering, counters, UTC responses and Colombo local-day boundaries.
+See the [exact contract](../../../../docs/architecture/API-CONTRACTS.md#plan-workspaces).
 
 ## Apply the migration
 

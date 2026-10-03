@@ -33,8 +33,9 @@ filters, pagination and shared frontend response types. See the
 Planning storage supports depot/day workspaces, revisions, vehicle/driver trip
 references and ordered stops. Order outcomes can link served orders to stops or
 store deferral explanations, with database checks for reference consistency and
-one outcome per order/revision. Planning endpoints, allocation and publishing
-services are still pending; see the [planning guide](apps/api/app/planning/README.md).
+one outcome per order/revision. Dispatcher plan create/list/detail now provide
+draft workspaces and saved revision counts. Allocation, full result detail and
+publishing services remain pending; see the [planning guide](apps/api/app/planning/README.md).
 Remaining business endpoints and domain tables, optimization, competition dataset imports, POD capture, offline
 outbox processing and end-to-end workflows are **not implemented**. Public starter
 pages contain no real data. `scripts/seed.py --demo` delegates to the account seed;

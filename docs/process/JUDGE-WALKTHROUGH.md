@@ -24,8 +24,12 @@ stored date is the accepted date. After creating an order, authorize as the demo
 Dispatcher and query `/api/v1/dispatcher/orders?status=CONFIRMED` with that accepted
 date. The same ID/quantities appear with outlet/depot details. `/api/v1/fleet`
 returns two demo vehicles and one depot. Both reads are restricted to assigned
-depots; availability and remaining fuel are not yet computed. Frontend integration
-and the planning, publishing, loading, delivery and receipt steps remain planned.
+depots; availability and remaining fuel are not yet computed. Create a draft plan
+with `POST /api/v1/plans` using the assigned depot ID and the order's accepted date.
+List plans, open its ID, and verify the empty draft revision 1. Creating the same
+depot/date again returns 409 with the existing plan's Location. Plan detail reports
+saved revision counts, not optimization success. Frontend integration, allocation,
+publishing, loading, delivery and receipt steps remain planned.
 
 ## 1. Store Manager
 1. Login.
