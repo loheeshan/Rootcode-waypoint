@@ -33,6 +33,7 @@ export function NextStopScreen({ data, onNavigate, onArrived }: Props) {
           windowEnd={data.windowEnd}
           eta={data.eta}
           completedStops={data.completedStops}
+          variant={data.progressVariant}
         />
 
         <TurnByTurnCard
