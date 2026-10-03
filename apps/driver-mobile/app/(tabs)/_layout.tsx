@@ -30,6 +30,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="trip-ready" options={{ href: null }} />
       <Tabs.Screen name="trip-complete" options={{ href: null }} />
       <Tabs.Screen name="trip-records" options={{ href: null }} />
+      <Tabs.Screen name="sync-complete" options={{ href: null }} />
       <Tabs.Screen name="next-stop-after-save" options={{ href: null }} />
       <Tabs.Screen name="next-stop-last" options={{ href: null }} />
       <Tabs.Screen name="next-stop-departed" options={{ href: null }} />
