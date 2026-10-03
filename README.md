@@ -10,8 +10,10 @@ Monorepo boilerplate for the delivery operations application described in the su
 - Five shared TypeScript packages, a credential-storage-free API client, matching status types, starter UI components and provisional design tokens.
 - pnpm and uv lockfiles, checks, GitHub Actions, Docker Compose, environment templates, and the original architecture/process documents.
 
-The first backend increment adds user/role models and migration `0001_user_roles`,
-including the four role definitions. Authentication/RBAC, remaining domain tables,
+The backend includes identity and fleet models with migrations `0001_user_roles`
+and `0002_fleet_foundation`. They create users, roles, user-role assignments,
+depots, outlets and vehicles, and seed the four role definitions.
+Authentication/RBAC, remaining domain tables,
 business endpoints, optimization, account/dataset seed imports, POD capture, offline
 outbox processing and end-to-end workflows are **not implemented**. Public starter
 pages contain no real data. `scripts/seed.py` and `scripts/validate-plan.py`
@@ -81,7 +83,7 @@ Set-Location D:\Rootcode
 corepack pnpm dev:web
 ```
 
-Open [web](http://localhost:3000), [API docs](http://localhost:8000/docs), [liveness](http://localhost:8000/health), and [database readiness](http://localhost:8000/ready). Liveness works without a database; readiness returns 503 when PostgreSQL cannot be reached. The migration creates the identity tables and four role definitions; no demo accounts exist yet.
+Open [web](http://localhost:3000), [API docs](http://localhost:8000/docs), [liveness](http://localhost:8000/health), and [database readiness](http://localhost:8000/ready). Liveness works without a database; readiness returns 503 when PostgreSQL cannot be reached. Migrations create the identity and fleet tables and four role definitions. No demo accounts or fleet records are inserted.
 
 Terminal 3 — Driver or Loader:
 
@@ -102,9 +104,14 @@ After creating root `.env` and starting Docker Desktop:
 docker compose up --build
 # In another terminal after the services are healthy:
 docker compose exec api alembic upgrade head
+docker compose exec api alembic current
+docker compose exec api alembic check
 ```
 
 This starts PostgreSQL, FastAPI and the web app. Mobile apps run separately. The Compose configuration is for local development; the web's API URL is compiled at build time. `docker compose down` preserves the named database volume. Migrations are explicit commands; the API does not create or alter tables at startup.
+
+Current migration: `0002_fleet_foundation (head)`. For API-only startup and the
+Windows host-port workaround, see [Backend step 2](docs/process/BACKEND-STEP-02.md).
 
 ## Checks
 
@@ -117,13 +124,16 @@ uv run mypy app
 uv run pytest
 ```
 
-`pnpm build` builds the web app. `pnpm export:mobile` bundles Android and iOS JavaScript for both apps; it does not produce APK/IPA binaries. Root tests cover the shared client, and API tests cover health, readiness, CORS, identity constraints, migration rollback/reapply, and model/migration alignment. Add feature tests as each workflow is implemented.
+`pnpm build` builds the web app. `pnpm export:mobile` bundles Android and iOS JavaScript for both apps; it does not produce APK/IPA binaries. Root tests cover the shared client, and API tests cover health, readiness, CORS, identity and fleet constraints, migration rollback/reapply, and model/migration alignment. Add feature tests as each workflow is implemented.
 
 ## Next implementation branches
 
 Follow [CONTRIBUTING.md](CONTRIBUTING.md) and [the commit plan](docs/process/COMMIT-PLAN.md): approved design tokens/components, API schemas, database models and migrations, authentication/role guards, then role workflows. Register new models in `apps/api/app/db/models.py` before running `uv run alembic revision --autogenerate -m "description"` and review the generated migration before `uv run alembic upgrade head`.
 
-The first backend increment and its commit/push commands are documented in [Backend step 1](docs/process/BACKEND-STEP-01.md).
+The backend increments and their commit/push commands are documented in
+[Backend step 1: identity](docs/process/BACKEND-STEP-01.md) and
+[Backend step 2: fleet](docs/process/BACKEND-STEP-02.md). Order tables are next in
+the database commit plan.
 
 The canonical architecture is in [docs/architecture](docs/architecture/SYSTEM-ARCHITECTURE.md). Original `Main/` documents are retained as references; detailed role screens there and in `docs/roles` describe future implementation, not completed functionality. Starter token values are not claimed to match Figma.
 
@@ -131,9 +141,9 @@ The canonical architecture is in [docs/architecture](docs/architecture/SYSTEM-AR
 
 Follow [GITHUB-SETUP.md](docs/process/GITHUB-SETUP.md) for initial repository setup.
 Develop on feature branches, review changes through pull requests into `dev`,
-and promote reviewed releases to `main`. The identity database increment uses
-`feature/db-users-roles`; its four commits are described in
-[Backend step 1](docs/process/BACKEND-STEP-01.md).
+and promote reviewed releases to `main`. The fleet database increment uses
+`feature/db-fleet-foundation`; its three commits are described in
+[Backend step 2](docs/process/BACKEND-STEP-02.md).
 
 ## Dependency references
 
