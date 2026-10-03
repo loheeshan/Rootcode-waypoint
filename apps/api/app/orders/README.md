@@ -75,4 +75,31 @@ when testing; the server clock determines the cutoff.
 See the [exact JSON contract](../../../../docs/architecture/API-CONTRACTS.md#store-manager).
 `tests/test_store_orders_api.py` covers role/outlet isolation, cutoff boundaries,
 validation, filtering, stable tie ordering, and failed-write rollback. Frontend
-wiring, Dispatcher order views, receipts and status transitions remain pending.
+wiring, receipts and status transitions remain pending.
+
+## Dispatcher order queue
+
+`GET /api/v1/dispatcher/orders` requires `DISPATCHER`. It lists orders whose
+outlets belong to currently assigned depots, independent of Store outlet grants.
+Items include the Store order fields plus nested `outlet` (delivery constraints)
+and `depot` (ID/name). Order quantities stay three-decimal strings; timestamps
+are UTC, while outlet window times are local Asia/Colombo times.
+
+Optional filters: `depot_id`, `outlet_id`, `status`, `requested_delivery_date`.
+Use `status=CONFIRMED` for the confirmed queue; omitting status includes all
+statuses. Date filters match the accepted date after the Store cutoff. Pagination
+uses `limit` (1–100, default 20) and nonnegative `offset`. Access is applied in SQL
+before counting or pagination; rows sort by creation time then UUID descending.
+Unknown/foreign explicit depot/outlet filters receive 403. No assignments or no
+matches return an empty list. The endpoint is read-only; it does not allocate,
+defer, publish, or update order statuses. No new migration is required.
+
+To verify the Store-to-Dispatcher flow, create an order as the demo Store Manager,
+then authorize as the demo Dispatcher. Filter the queue by `status=CONFIRMED` and
+the creation response's accepted `requested_delivery_date`; the same order ID
+and quantities should appear with its outlet and depot details. The demo resource
+seed gives these two accounts the corresponding outlet/depot scopes.
+
+See the [Dispatcher contract](../../../../docs/architecture/API-CONTRACTS.md#dispatcher-order-queue).
+`tests/test_dispatcher_api.py` covers this flow, current depot access, scoped
+counts/metadata, revoked permissions, filters, pagination and read errors.

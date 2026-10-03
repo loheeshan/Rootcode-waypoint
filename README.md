@@ -25,6 +25,9 @@ depot, two outlets, two vehicles and demo account assignments; sign-in screens
 are not connected yet.
 Store order creation, listing and detail endpoints enforce outlet access and the
 16:00 Sri Lanka submission cutoff. See the [order API guide](apps/api/app/orders/README.md#store-order-api).
+Dispatcher order listing and fleet reads now enforce depot assignments, with
+filters, pagination and shared frontend response types. See the
+[Dispatcher contract](docs/architecture/API-CONTRACTS.md#dispatcher).
 Remaining business endpoints and domain tables, optimization, competition dataset imports, POD capture, offline
 outbox processing and end-to-end workflows are **not implemented**. Public starter
 pages contain no real data. `scripts/seed.py --demo` delegates to the account seed;

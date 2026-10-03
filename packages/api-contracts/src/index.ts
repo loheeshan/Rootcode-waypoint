@@ -45,6 +45,48 @@ export interface OrderListResponse {
   limit: number;
   offset: number;
 }
+export interface DepotResponse {
+  id: string;
+  name: string;
+}
+export interface OutletResponse {
+  id: string;
+  brand: string;
+  district: string;
+  depot_id: string;
+  dock_type: string;
+  parking_constraint: 'none' | 'van_only';
+  window_open_time: string;
+  window_close_time: string;
+  mall_window: boolean;
+}
+export interface VehicleResponse {
+  id: string;
+  type: 'van' | 'truck';
+  temperature_type: 'ambient' | 'reefer';
+  weight_cap_kg: string;
+  volume_cap_m3: string;
+  km_per_l: string;
+  weekly_fuel_quota_l: string;
+  depot_id: string;
+}
+export interface FleetListResponse {
+  items: VehicleResponse[];
+  total: number;
+  limit: number;
+  offset: number;
+  depots: DepotResponse[];
+}
+export interface DispatcherOrderResponse extends OrderResponse {
+  outlet: OutletResponse;
+  depot: DepotResponse;
+}
+export interface DispatcherOrderListResponse {
+  items: DispatcherOrderResponse[];
+  total: number;
+  limit: number;
+  offset: number;
+}
 export class ApiError extends Error {
   constructor(public readonly status: number, message: string) { super(message); this.name = 'ApiError'; }
 }
