@@ -22,6 +22,7 @@ const STOPS_CHILDREN = [
   "trip-ready",
   "trip-complete",
   "trip-records",
+  "kandy-trip",
   "next-stop",
   "next-stop-departed",
   "next-stop-second",
