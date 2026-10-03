@@ -51,3 +51,18 @@ export const mockNextStopLast: NextStopSnapshot = {
   completedStops: 5,
   progressVariant: "recorded",
 };
+
+// TODO(feature/driver-sqlite): read after the departure time is recorded on the phone
+export const mockNextStopDeparted: NextStopSnapshot = {
+  ...mockNextStop,
+  stopNo: 1,
+  outletCode: "OUT011",
+  outletName: "OUT011 Cargills Kollupitiya",
+  address: "Kollupitiya · rear receiving dock",
+  windowStart: "04:00",
+  windowEnd: "04:45",
+  eta: "04:12",
+  completedStops: 0,
+  progressVariant: "departed",
+  departedAt: "03:30",
+};
