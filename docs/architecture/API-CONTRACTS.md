@@ -5,6 +5,8 @@
 Authentication, Store order create/list/detail, Dispatcher order listing and
 fleet read routes are implemented. Store receipt, planning, live operations,
 Loader and Driver business routes remain planned.
+Migration `0005_planning_foundation` adds storage for plans, revisions, trips and
+stops; it does not mount planning routes or implement allocation/publishing.
 The API also exposes `GET /health`,
 `GET /ready`, and the same checks under `/api/v1`. Health returns `status`,
 `service`, and `version`; readiness returns 200 when PostgreSQL is reachable
@@ -343,6 +345,24 @@ READY
 IN_PROGRESS
 COMPLETED
 ```
+
+Plan/revision storage (no planning API yet):
+```text
+DRAFT
+PUBLISHED
+```
+
+Trip stop storage (no delivery transitions yet):
+```text
+PLANNED
+ARRIVED
+DELIVERED
+FAILED
+```
+
+`PlanStatus` and `StopStatus` join `TripStatus` in shared types and are re-exported
+by `@waypoint/api-contracts`. These enums specify stored values, not permission
+to perform a transition. Planning response DTOs will be defined with the routes.
 
 Sync:
 ```text
