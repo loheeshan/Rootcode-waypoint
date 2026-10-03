@@ -6,7 +6,8 @@ Authentication routes below are implemented. Store, Dispatcher, Loader and
 Driver business routes remain planned. The API also exposes `GET /health`,
 `GET /ready`, and the same checks under `/api/v1`. Health returns `status`,
 `service`, and `version`; readiness returns 200 when PostgreSQL is reachable
-and 503 otherwise. No demo accounts are seeded yet.
+and 503 otherwise. Demo accounts can be created explicitly with the
+[seed command](../../apps/api/app/auth/README.md#create-demo-accounts).
 
 ## Contract freeze
 
@@ -69,8 +70,8 @@ account can log in and read `/me`, but cannot pass a role guard. Resource owners
 
 The shared `@waypoint/api-contracts` package exports `LoginRequest`, `LoginResponse`
 and `AuthUser`. Its client accepts a token provider and sends the bearer header;
-it does not store credentials. Client sign-in screens and account seeding remain
-pending. There is no refresh endpoint yet; expired tokens require another login.
+it does not store credentials. Client sign-in screens remain pending. There is
+no refresh endpoint yet; expired tokens require another login.
 See the [auth setup guide](../../apps/api/app/auth/README.md) for signing-key setup.
 
 ## Store Manager
