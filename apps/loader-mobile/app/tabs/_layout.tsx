@@ -10,16 +10,22 @@ import { AppTabBar } from '../../src/components/AppTabBar';
  */
 const SUB_SCREENS: Record<string, string | null> = {
   vehicle: 'today',
-  profile: null,
-  settings: null,
-  notifications: null,
-  synced: null,
-  'sync-queue': null,
+  'no-plan': 'today',
+  'kandy-remote': 'today',
+  'staging-issue': 'report',
+  'trip-checklist': 'checklist',
+  manifest: 'depart',
   'signoff-saved': 'depart',
   'vehicle-ready': 'depart',
   'issue-resolved': 'depart',
   'dispatcher-pending': 'depart',
   'departure-checks': 'depart',
+  profile: null,
+  settings: null,
+  notifications: null,
+  synced: null,
+  'sync-queue': null,
+  'session-expired': null,
 };
 
 export default function TabsLayout() {
@@ -44,17 +50,9 @@ export default function TabsLayout() {
       <Tabs.Screen name="report" options={{ title: 'Report' }} />
       <Tabs.Screen name="depart" options={{ title: 'Depart' }} />
 
-      <Tabs.Screen name="vehicle" options={{ href: null }} />
-      <Tabs.Screen name="profile" options={{ href: null }} />
-      <Tabs.Screen name="settings" options={{ href: null }} />
-      <Tabs.Screen name="notifications" options={{ href: null }} />
-      <Tabs.Screen name="synced" options={{ href: null }} />
-      <Tabs.Screen name="sync-queue" options={{ href: null }} />
-      <Tabs.Screen name="signoff-saved" options={{ href: null }} />
-      <Tabs.Screen name="vehicle-ready" options={{ href: null }} />
-      <Tabs.Screen name="issue-resolved" options={{ href: null }} />
-      <Tabs.Screen name="dispatcher-pending" options={{ href: null }} />
-      <Tabs.Screen name="departure-checks" options={{ href: null }} />
+      {Object.keys(SUB_SCREENS).map((name) => (
+        <Tabs.Screen key={name} name={name} options={{ href: null }} />
+      ))}
     </Tabs>
   );
 }

@@ -11,6 +11,8 @@ type Props = { trip: Trip; offlineCopy?: boolean };
 
 export function TripCardView({ trip, offlineCopy }: Props) {
   const router = useRouter();
+  const go = (pathname: string, params?: Record<string, string>) =>
+    router.navigate((params ? { pathname, params } : pathname) as never);
   const s = trip.status;
 
   return (
@@ -49,7 +51,7 @@ export function TripCardView({ trip, offlineCopy }: Props) {
           ) : (
             <Pill label={trip.category} tone="neutral" />
           )}
-          {trip.tags.map((tag) => (
+          {trip.tags.map((tag: string) => (
             <Pill key={tag} label={tag} tone="neutral" />
           ))}
         </View>
@@ -72,10 +74,12 @@ export function TripCardView({ trip, offlineCopy }: Props) {
         <>
           <View style={styles.progressBox}>
             <View style={styles.spread}>
-              <View style={styles.row}>
+              <View style={[styles.row, { flex: 1 }]}>
                 <View style={styles.blueDot} />
                 <Text style={styles.progressTitle}>
-                  Loading {s.loaded} of {s.total} stops loaded
+                  {s.loaded >= s.total
+                    ? `✓ Ready · ${s.total} of ${s.total} processed`
+                    : `Loading ${s.loaded} of ${s.total} stops loaded`}
                 </Text>
               </View>
               <Text style={styles.pct}>{Math.round((s.loaded / s.total) * 100)}%</Text>
@@ -94,16 +98,23 @@ export function TripCardView({ trip, offlineCopy }: Props) {
           </View>
           <Pressable
             style={({ pressed }) => [styles.primary, pressed && { opacity: 0.85 }]}
-            onPress={() => router.navigate('/tabs/checklist')}
+            onPress={() =>
+              s.loaded >= s.total ? go('/tabs/manifest', { id: trip.id }) : go('/tabs/checklist')
+            }
           >
-            <Text style={styles.primaryText}>Continue Loading {trip.id}</Text>
+            <Text style={styles.primaryText}>
+              {s.loaded >= s.total ? `View ${trip.id} signed manifest` : `Continue Loading ${trip.id}`}
+            </Text>
             <Ionicons name="arrow-forward" size={18} color="#fff" />
           </Pressable>
         </>
       )}
 
       {s.kind === 'notStarted' && (
-        <View style={styles.spread}>
+        <Pressable
+          style={styles.spread}
+          onPress={() => go('/tabs/trip-checklist', { id: trip.id })}
+        >
           <View style={styles.row}>
             <Ionicons name="ellipse-outline" size={16} color="#94A3B8" />
             <Text style={styles.notStarted}>
@@ -111,7 +122,7 @@ export function TripCardView({ trip, offlineCopy }: Props) {
             </Text>
           </View>
           <Text style={styles.meta}>{s.dock}</Text>
-        </View>
+        </Pressable>
       )}
 
       {s.kind === 'issue' && (
@@ -125,7 +136,7 @@ export function TripCardView({ trip, offlineCopy }: Props) {
           </View>
           <Pressable
             style={({ pressed }) => [styles.issueBtn, pressed && { opacity: 0.85 }]}
-            onPress={() => router.navigate('/tabs/report')}
+            onPress={() => go('/tabs/staging-issue', { id: trip.id })}
           >
             <Ionicons name="clipboard-outline" size={16} color={t.red} />
             <Text style={styles.issueBtnText}>View Issue & Recheck Staging</Text>
@@ -152,7 +163,7 @@ export function TripCardView({ trip, offlineCopy }: Props) {
             <Text style={styles.driver}>Driver: {s.driver}</Text>
             <Pressable
               style={({ pressed }) => [styles.manifest, pressed && { opacity: 0.85 }]}
-              onPress={() => router.navigate('/tabs/depart')}
+              onPress={() => go('/tabs/manifest', { id: trip.id })}
             >
               <Ionicons name="grid-outline" size={16} color={t.text} />
               <Text style={styles.manifestText}>Manifest</Text>
@@ -195,7 +206,7 @@ const styles = StyleSheet.create({
     borderRadius: 12, padding: 12, gap: 8,
   },
   blueDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: t.blue },
-  progressTitle: { fontSize: 14, fontWeight: '700', color: t.text },
+  progressTitle: { fontSize: 14, fontWeight: '700', color: t.text, flexShrink: 1 },
   pct: { fontSize: 14, fontWeight: '800', color: t.blue },
   track: { height: 8, borderRadius: 999, backgroundColor: '#E2E8F0', overflow: 'hidden' },
   fill: { height: '100%', backgroundColor: t.blue, borderRadius: 999 },
