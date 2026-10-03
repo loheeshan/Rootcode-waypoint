@@ -23,8 +23,9 @@ for request/response fields. An explicit demo seed command creates the four role
 accounts with a password you choose. A separate resource seed adds a synthetic
 depot, two outlets, two vehicles and demo account assignments; sign-in screens
 are not connected yet.
-Scope enforcement in business endpoints, remaining domain tables,
-business endpoints, optimization, competition dataset imports, POD capture, offline
+Store order creation, listing and detail endpoints enforce outlet access and the
+16:00 Sri Lanka submission cutoff. See the [order API guide](apps/api/app/orders/README.md#store-order-api).
+Remaining business endpoints and domain tables, optimization, competition dataset imports, POD capture, offline
 outbox processing and end-to-end workflows are **not implemented**. Public starter
 pages contain no real data. `scripts/seed.py --demo` delegates to the account seed;
 `scripts/validate-plan.py` remains a placeholder.

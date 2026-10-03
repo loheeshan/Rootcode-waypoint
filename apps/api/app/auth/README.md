@@ -104,7 +104,8 @@ resources and the documented assignments for the four demo accounts. Other
 assignments require trusted data setup; no public account can self-assign an
 outlet/depot. Resource records are identified by fixed demo UUIDs, not by name.
 
-Frontend sign-in screens are not connected yet. Business-route scope enforcement,
+Store create/list/detail routes now enforce role and outlet scope in the backend.
+Frontend sign-in screens are not connected yet. Other business-route scope enforcement,
 password recovery, refresh tokens, per-token revocation and login rate limiting
 remain future work. Until refresh is implemented, expired tokens require another
 login. Client logout must discard its stored token.

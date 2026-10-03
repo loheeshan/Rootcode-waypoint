@@ -1,4 +1,4 @@
-import type { Role } from '@waypoint/shared-types';
+import type { OrderStatus, Role } from '@waypoint/shared-types';
 
 export type { Role, OrderStatus, TripStatus, SyncStatus } from '@waypoint/shared-types';
 export interface HealthResponse { status: 'ok'; service: string; version: string }
@@ -16,6 +16,34 @@ export interface LoginResponse {
   token_type: 'bearer';
   expires_in: number;
   user: AuthUser;
+}
+export interface OrderCreateRequest {
+  outlet_id: string;
+  requested_delivery_date: string;
+  temperature_requirement: 'ambient' | 'chilled';
+  order_weight_kg: string | number;
+  order_volume_m3: string | number;
+}
+export interface OrderResponse {
+  id: string;
+  outlet_id: string;
+  requested_delivery_date: string;
+  temperature_requirement: 'ambient' | 'chilled';
+  order_weight_kg: string;
+  order_volume_m3: string;
+  status: OrderStatus;
+  created_at: string;
+}
+export interface OrderCreateResponse {
+  order: OrderResponse;
+  submitted_delivery_date: string;
+  cutoff_applied: boolean;
+}
+export interface OrderListResponse {
+  items: OrderResponse[];
+  total: number;
+  limit: number;
+  offset: number;
 }
 export class ApiError extends Error {
   constructor(public readonly status: number, message: string) { super(message); this.name = 'ApiError'; }

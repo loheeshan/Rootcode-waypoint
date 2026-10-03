@@ -1,6 +1,6 @@
 """Order storage registered in app.db.models for Alembic.
 
-Order submission, cutoff rules, authorization and status transitions are separate work.
+Submission and cutoff handling live in service.py; later status transitions are separate work.
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ class OrderStatus(StrEnum):
 
 
 class Order(Base):
-    """Requested delivery dates use the local Asia/Colombo calendar."""
+    """Store the accepted delivery date after the Asia/Colombo submission cutoff."""
 
     __tablename__ = "orders"
     __table_args__ = (

@@ -17,7 +17,9 @@ loader@waypoint.demo
 driver@waypoint.demo
 ```
 
-Login and `/me` are implemented and can be exercised through the API docs.
+Login, `/me`, and Store order create/list/detail are implemented and can be
+exercised through the API docs. Store creation applies the 16:00 Colombo cutoff;
+the response explains a date adjustment and the stored date is the accepted date.
 Frontend login integration and the operational walkthrough below remain planned.
 
 ## 1. Store Manager
