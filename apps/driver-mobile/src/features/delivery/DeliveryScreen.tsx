@@ -78,6 +78,7 @@ export function DeliveryScreen({ data, onComplete, onCantDeliver }: Props) {
         />
         <ManifestChecklist
           items={data.items}
+          outcome={outcome}
           quantities={quantities}
           exceptions={exceptions}
           onQtyChange={changeQty}
