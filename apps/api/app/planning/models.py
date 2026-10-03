@@ -11,6 +11,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     UniqueConstraint,
@@ -104,6 +105,7 @@ class PlanRevision(Base):
 class Trip(Base):
     __tablename__ = "trips"
     __table_args__ = (
+        Index("uq_trips_id_revision", "id", "plan_revision_id", unique=True),
         UniqueConstraint("plan_revision_id", "vehicle_id", "trip_number",
                          name="uq_trips_revision_vehicle_number"),
         CheckConstraint("trip_number IN (1, 2)", name="trip_number_allowed"),
@@ -137,6 +139,7 @@ class Trip(Base):
 class TripStop(Base):
     __tablename__ = "trip_stops"
     __table_args__ = (
+        Index("uq_trip_stops_id_trip_outlet", "id", "trip_id", "outlet_id", unique=True),
         UniqueConstraint("trip_id", "sequence_number", name="uq_trip_stops_trip_sequence"),
         UniqueConstraint("trip_id", "outlet_id", name="uq_trip_stops_trip_outlet"),
         CheckConstraint("sequence_number > 0", name="sequence_number_positive"),
