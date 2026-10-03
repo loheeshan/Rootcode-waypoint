@@ -35,9 +35,9 @@ class SeedResult:
     existing: tuple[str, ...]
 
 
-def _check_environment(app_env: str) -> None:
+def ensure_demo_environment(app_env: str) -> None:
     if app_env not in {"development", "test"}:
-        raise DemoSeedError("Demo accounts require APP_ENV=development or test.")
+        raise DemoSeedError("Demo seeding requires APP_ENV=development or test.")
 
 
 def _check_password(password: str) -> None:
@@ -51,7 +51,7 @@ def _check_password(password: str) -> None:
 
 def seed_demo_users(session: Session, password: str, *, app_env: str) -> SeedResult:
     """Own one transaction; preserve every existing account and role assignment."""
-    _check_environment(app_env)
+    ensure_demo_environment(app_env)
     _check_password(password)
     created: list[str] = []
     existing: list[str] = []
@@ -80,7 +80,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.parse_args(argv)
     try:
         settings = get_settings()
-        _check_environment(settings.app_env)
+        ensure_demo_environment(settings.app_env)
         # Never fall back to echoing a password when no secure terminal is available.
         with warnings.catch_warnings():
             warnings.simplefilter("error", GetPassWarning)

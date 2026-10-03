@@ -56,7 +56,10 @@ same user shape directly, without the login wrapper. Roles are sorted and may
 be `DISPATCHER`, `STORE_MANAGER`, `DRIVER`, or `LOADER`; the list can be empty.
 `outlet_ids` and `depot_ids` are sorted arrays of UUID strings identifying explicit
 resource assignments. Both arrays are empty for existing/demo users until a
-trusted data setup assigns resources. A depot assignment does not implicitly
+trusted data setup assigns resources. The explicit
+[demo resource seed](../../apps/api/app/fleet/README.md#synthetic-demo-data) assigns
+the demo Store Manager one outlet and the Dispatcher/Loader/Driver one depot.
+A depot assignment does not implicitly
 grant Store Manager access to its outlets, or Driver access to its trips.
 The API reloads active status, roles and resource assignments from the database
 on every authenticated request. Token claims never grant roles or resource

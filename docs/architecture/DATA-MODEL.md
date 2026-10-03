@@ -44,9 +44,11 @@ do not automatically grant Store Manager outlet access or Driver trip access.
 Domain endpoints must select the appropriate role and resource boundary.
 
 The migration adds empty tables, preserves all existing data and grants no
-access automatically. Demo account seeding does not assign resources. Approved
-data setup must add assignments before scoped business endpoints can be used;
-there is no public assignment-management endpoint. Login and `/me` return
+access automatically. Demo account seeding does not assign resources. The separate
+[demo resource seed](../../apps/api/app/fleet/README.md#synthetic-demo-data) creates
+synthetic records and assigns the demo store/depot to the intended demo accounts.
+Other assignments need trusted data setup; there is no public assignment-management
+endpoint. Login and `/me` return
 sorted `outlet_ids` and `depot_ids` from the current mappings.
 
 Downgrading to `0003_orders` deletes the mapping tables and their assignments,
@@ -66,7 +68,9 @@ application; the database does not generate them for direct SQL inserts.
 
 Both `outlets.depot_id` and `vehicles.depot_id` are indexed foreign keys to
 `depots.id`. Deleting a depot is rejected while any outlet or vehicle references
-it. The migration does not insert depot, outlet, or vehicle records.
+it. The migration does not insert depot, outlet, or vehicle records. The explicit
+demo resource seed adds one depot, two outlets and two vehicles using fixed IDs;
+it preserves matching rows and rejects conflicting data without overwriting it.
 
 | Vehicle field | PostgreSQL type | Allowed stored values |
 |---|---|---|

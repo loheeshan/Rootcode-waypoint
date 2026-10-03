@@ -98,9 +98,11 @@ trip assignment checks or expose business endpoints by themselves.
 
 Login and `/me` include sorted `outlet_ids` and `depot_ids`; empty arrays grant
 no resource access. They describe assignments, not additional roles. The new
-migration and existing demo seed leave these mappings empty. A trusted data
-setup must insert approved assignments; no public account can self-assign an
-outlet/depot. No fleet records or mappings are guessed from an email address.
+migration and account seed leave these mappings empty. The explicit
+[demo resource seed](../fleet/README.md#synthetic-demo-data) creates synthetic
+resources and the documented assignments for the four demo accounts. Other
+assignments require trusted data setup; no public account can self-assign an
+outlet/depot. Resource records are identified by fixed demo UUIDs, not by name.
 
 Frontend sign-in screens are not connected yet. Business-route scope enforcement,
 password recovery, refresh tokens, per-token revocation and login rate limiting
@@ -158,8 +160,11 @@ password, and its current roles may differ from the table above.
 
 With `JWT_SECRET_KEY` configured as described above, open `/docs`, call JSON login
 with a seeded email and the password you chose, paste the returned token into
-**Authorize**, then call `GET /api/v1/me`. No default password exists. Fleet/order
-dataset imports and demo outlet/depot assignment setup are future increments.
+**Authorize**, then call `GET /api/v1/me`. No default password exists. To create
+the demo depot, outlets, vehicles and resource assignments, run
+`docker compose exec api python -m app.fleet.seed --demo` after rebuilding the
+API; see the [resource setup guide](../fleet/README.md#synthetic-demo-data).
+Competition dataset imports and order/trip seeding remain future work.
 
 Library references: [Argon2 password hashing](https://argon2-cffi.readthedocs.io/en/stable/howto.html)
 and [PyJWT validation](https://pyjwt.readthedocs.io/en/stable/api.html).
