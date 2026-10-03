@@ -21,6 +21,7 @@ const TABS: Record<string, { label: string; icon: IconName }> = {
 const STOPS_CHILDREN = [
   "next-stop",
   "next-stop-closed",
+  "trip-revision",
   "record-delivery",
   "could-not-deliver",
   "could-not-deliver-offline",
