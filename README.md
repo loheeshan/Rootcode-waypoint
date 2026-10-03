@@ -12,10 +12,11 @@ Monorepo boilerplate for the delivery operations application described in the su
 
 The backend includes identity, fleet, order and planning models with migrations
 `0001_user_roles`, `0002_fleet_foundation`, `0003_orders`, `0004_user_scopes` and
-`0005_planning_foundation` and `0006_plan_outcomes`.
+`0005_planning_foundation`, `0006_plan_outcomes` and `0007_fleet_operations`.
 They create users, roles, user-role assignments, depots, outlets, vehicles,
 orders, user-outlet assignments, user-depot assignments, plans, plan revisions,
-trips, trip stops, plan assignments and deferral decisions, and seed the
+trips, trip stops, plan assignments, deferral decisions, daily vehicle availability
+and daily fuel consumption totals, and seed the
 four role definitions. JSON login (`POST /api/v1/auth/login`), current user
 (`GET /api/v1/me`), Argon2id passwords, signed access tokens and reusable role
 guards and outlet/depot scope helpers are implemented. Login and `/me` return
@@ -30,6 +31,9 @@ Store order creation, listing and detail endpoints enforce outlet access and the
 Dispatcher order listing and fleet reads now enforce depot assignments, with
 filters, pagination and shared frontend response types. See the
 [Dispatcher contract](docs/architecture/API-CONTRACTS.md#dispatcher).
+Daily availability and fuel usage have database storage; public input endpoints
+and planning enforcement are still pending. Missing records mean unknown, not
+available or zero usage. See the [fleet input rules](apps/api/app/fleet/README.md#daily-operational-inputs).
 Planning storage supports depot/day workspaces, revisions, vehicle/driver trip
 references and ordered stops. Order outcomes can link served orders to stops or
 store deferral explanations, with database checks for reference consistency and
@@ -132,7 +136,7 @@ docker compose exec api alembic check
 
 This starts PostgreSQL, FastAPI and the web app. Mobile apps run separately. The Compose configuration is for local development; the web's API URL is compiled at build time. `docker compose down` preserves the named database volume. Migrations are explicit commands; the API does not create or alter tables at startup.
 
-Current migration: `0006_plan_outcomes (head)`. Apply migrations after
+Current migration: `0007_fleet_operations (head)`. Apply migrations after
 rebuilding the API. Users start with no outlet/depot assignments until
 explicitly configured, including through the demo resource seed below.
 For API-only startup and the

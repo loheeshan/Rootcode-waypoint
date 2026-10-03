@@ -9,6 +9,8 @@ Migration `0005_planning_foundation` adds storage for plans, revisions, trips an
 stops. Plan workspace APIs now use this storage; allocation/publishing remain pending.
 Migration `0006_plan_outcomes` adds order result and deferral reason storage,
 without new routes or changes to existing order JSON/status behavior.
+Migration `0007_fleet_operations` adds daily availability and fuel-usage storage.
+It adds no routes or DTO changes; fleet reads still return only master data.
 The API also exposes `GET /health`,
 `GET /ready`, and the same checks under `/api/v1`. Health returns `status`,
 `service`, and `version`; readiness returns 200 when PostgreSQL is reachable
@@ -288,6 +290,9 @@ filters or pagination. This lets the frontend build a depot selector even with
 zero matching vehicles. Vehicle numeric values are three-decimal strings.
 `weekly_fuel_quota_l` is the configured quota, **not remaining fuel**. Vehicle
 availability, fuel usage, trip counts and feasibility are not computed yet.
+Daily availability and fuel inputs now have storage, but no public input service
+or connection to this response. Missing daily records mean unknown, not available
+or zero fuel used. See the [storage rules](DATA-MODEL.md#daily-vehicle-availability-and-fuel-usage).
 
 Both routes return 200 with empty `items` and `total: 0` when no rows match or
 no depots are assigned; fleet also returns `depots: []` when none are assigned.
@@ -402,8 +407,9 @@ The past-date error is `{"detail":"Delivery date cannot be before today in Asia/
 Field validation uses the existing sanitized 422 format.
 
 Shared types: `PlanCreateRequest`, `PlanResponse`, `PlanRevisionResponse`,
-`PlanDetailResponse`, `PlanListResponse`. This increment adds no migration;
-existing head `0006_plan_outcomes` is required for revision counts.
+`PlanDetailResponse`, `PlanListResponse`. The plan endpoints introduced no new
+migration; at least `0006_plan_outcomes` is required for revision counts. Apply
+the current migration head listed in the root README when updating the backend.
 
 ## Loader
 

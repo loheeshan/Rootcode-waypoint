@@ -11,6 +11,8 @@ Migration `0005_planning_foundation` adds `plans`, `plan_revisions`, `trips`, an
 Migration `0006_plan_outcomes` adds `plan_assignments`, `deferral_decisions`, and
 supporting unique indexes on orders, trips and stops. All 13 earlier tables and
 records are preserved; no outcomes are inserted.
+Migration `0007_fleet_operations` adds empty `vehicle_availability` and
+`vehicle_fuel_usage` tables, preserving all 15 earlier tables and records.
 The other tables in the core table list remain planned.
 
 ### Identity
@@ -85,7 +87,8 @@ it preserves matching rows and rejects conflicting data without overwriting it.
 | `weekly_fuel_quota_l` | `NUMERIC(12, 3)` | At least 0 and less than 1,000,000,000 litres |
 
 These fields store three decimal places and reject NaN and infinity. A zero fuel
-quota is allowed. Fuel usage tracking and enforcing the quota during planning
+quota is allowed. Daily consumption storage is implemented below. Public input
+services, remaining-fuel calculations and enforcing the quota during planning
 remain future work.
 
 Outlet delivery rules:
@@ -104,11 +107,44 @@ Outlet delivery rules:
   `dock_type` is a required text label because its allowed values were also
   unspecified; there is no fixed dock-type list yet.
 
-This increment stores fleet data and enforces field and foreign-key constraints.
-Vehicle availability, fuel usage records, route allocation, and planning rules
-are not implemented. `GET /api/v1/fleet` now provides Dispatcher-only vehicle
+Fleet storage enforces field and foreign-key constraints. Daily availability
+and fuel records are defined below; route allocation and planning rules are
+not implemented. `GET /api/v1/fleet` provides Dispatcher-only vehicle
 reads scoped to current depot assignments, including assigned depot choices.
 There are no public fleet write endpoints. The read API adds no schema changes.
+
+### Daily vehicle availability and fuel usage
+
+| Table | Stored fields and constraints |
+|---|---|
+| `vehicle_availability` | UUID `id`; required `vehicle_id`; required `availability_date` (`DATE`); required `is_available` (`BOOLEAN`, no default); required timezone-aware database-default `created_at`. Unique `(vehicle_id, availability_date)`. |
+| `vehicle_fuel_usage` | UUID `id`; required `vehicle_id`; required `usage_date` (`DATE`); required `fuel_used_l` (`NUMERIC(12, 3)`, `0 <= value < 1,000,000,000`, no default); required timezone-aware database-default `created_at`. Unique `(vehicle_id, usage_date)`. |
+
+Both dates use the Asia/Colombo calendar. Availability applies to a whole day;
+partial-day windows are unsupported. Missing availability is unknown, not true.
+Fuel usage is one authoritative consumed-fuel total across all trips for that
+day; corrections replace it, rather than appending or adding another daily total.
+Zero is explicitly known zero; missing usage is unknown. Numeric bounds reject
+NaN and infinity, but allow actual usage above a vehicle's quota to be recorded.
+
+The daily formats and whole-day availability are implementation choices, since
+the supplied documents name these tables without specifying their fields.
+The intended quota week is Monday–Sunday in Colombo, also an implementation
+assumption; this migration performs no weekly calculation. Future quota checks
+must separately account for reservations on unexecuted published trips, avoid
+double counting, and handle incomplete inputs and concurrent updates/publishing.
+
+Vehicle foreign keys use `RESTRICT`, including deletion through the ORM with
+relationships loaded. Removing a daily row never deletes the vehicle. Unique
+keys start with `vehicle_id`, supporting both FK lookups and date-range reads.
+UUIDs are application-generated. Creation timestamps do not track later changes.
+Public write/read DTOs, audit/concurrency policies and planner integration remain
+future work. No records are inserted by this migration or the demo seeds; current
+fleet and plan APIs retain their existing response shapes.
+
+Downgrading to `0006_plan_outcomes` drops only these two tables and their data,
+preserving all 15 earlier tables. Reapplying creates empty tables. See the
+[fleet operational guide](../../apps/api/app/fleet/README.md#daily-operational-inputs).
 
 ### Orders
 
@@ -306,6 +342,24 @@ volume_cap_m3
 km_per_l
 weekly_fuel_quota_l
 depot_id
+```
+
+### vehicle_availability
+```text
+id
+vehicle_id
+availability_date
+is_available
+created_at
+```
+
+### vehicle_fuel_usage
+```text
+id
+vehicle_id
+usage_date
+fuel_used_l
+created_at
 ```
 
 ### orders

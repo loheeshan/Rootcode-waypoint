@@ -140,7 +140,8 @@ After the demo seeds, authorize in `/docs` as `dispatcher@waypoint.demo`, take
 `depot_ids[0]` from `/me`, and create a plan for the accepted delivery date from a
 Store order. List and open the returned plan ID; revision 1 should be empty and
 draft. A second identical request should return 409 pointing to that plan.
-No new migration is needed; keep the existing `0006_plan_outcomes` head applied.
+These routes require at least `0006_plan_outcomes`; apply the current migration
+head shown below when updating the backend.
 Tests in `tests/test_plans_api.py` cover scope/role revocation, concurrent creation,
 atomic failures, filtering, counters, UTC responses and Colombo local-day boundaries.
 See the [exact contract](../../../../docs/architecture/API-CONTRACTS.md#plan-workspaces).
@@ -156,11 +157,13 @@ docker compose exec api alembic current
 docker compose exec api alembic check
 ```
 
-Expected head: `0006_plan_outcomes`. The newest migration creates two empty tables
-and three supporting parent indexes; all 13 earlier tables and their records are
-preserved. The earlier `0005` migration created the four planning foundation
-tables. Neither migration inserts planning data. Demo seeds keep their previous
-behavior.
+Expected head: `0007_fleet_operations`. It adds empty daily availability/fuel
+tables and preserves all 15 earlier tables. See the
+[fleet input guide](../fleet/README.md#daily-operational-inputs) for their rules.
+Migration `0006` created two outcome tables and three supporting parent indexes;
+`0005` created the four planning foundation tables. None of these migrations
+inserts planning data, availability or fuel usage. Demo seeds keep their previous
+behavior. Daily input storage is not yet connected to allocation or publishing.
 
 Local Python, from `apps/api`: `uv sync --frozen`, then `uv run alembic upgrade head`.
 Run `uv run ruff check .`, `uv run mypy app` and `uv run pytest -q` for backend checks.
