@@ -1,6 +1,8 @@
 import type { OrderStatus, Role } from '@waypoint/shared-types';
 
-export type { Role, OrderStatus, TripStatus, SyncStatus } from '@waypoint/shared-types';
+export type {
+  Role, OrderStatus, TripStatus, PlanStatus, StopStatus, SyncStatus,
+} from '@waypoint/shared-types';
 export interface HealthResponse { status: 'ok'; service: string; version: string }
 export interface LoginRequest { email: string; password: string }
 export interface AuthUser {

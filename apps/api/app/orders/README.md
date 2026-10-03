@@ -19,7 +19,7 @@ docker compose exec api alembic current
 docker compose exec api alembic check
 ```
 
-The order table was introduced at `0003_orders`; current head is `0004_user_scopes`.
+The order table was introduced at `0003_orders`; current head is `0005_planning_foundation`.
 This API increment adds no migration. The order migration preserves existing users,
 roles, depots, outlets and vehicles, and inserts no sample orders. Downgrading
 to `0002_fleet_foundation` deletes the order table and its data; use disposable

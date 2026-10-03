@@ -6,6 +6,8 @@ Migration `0001_user_roles` implements `users`, `roles`, and `user_roles`.
 Migration `0002_fleet_foundation` adds `depots`, `outlets`, and `vehicles`.
 Migration `0003_orders` adds `orders`.
 Migration `0004_user_scopes` adds `user_outlets` and `user_depots`.
+Migration `0005_planning_foundation` adds `plans`, `plan_revisions`, `trips`, and
+`trip_stops`. It preserves all earlier tables and inserts no planning records.
 The other tables in the core table list remain planned.
 
 ### Identity
@@ -130,6 +132,53 @@ results/counts to assigned depots; it includes outlet constraints and depot name
 That read API does not rely on Store outlet grants or snapshot depot ownership.
 Order status transitions and receipt processing remain separate future work.
 
+### Planning foundation
+
+| Table | Stored fields and constraints |
+|---|---|
+| `plans` | UUID `id`; required `depot_id` and `created_by` user references; required local `delivery_date`; `status` defaults to `DRAFT`; required timezone-aware `created_at` defaults to database time. Unique `(depot_id, delivery_date)`. |
+| `plan_revisions` | UUID `id`; required `plan_id`; positive integer `revision_number`, unique within the plan; `status` defaults to `DRAFT`; nullable timezone-aware `published_at`. |
+| `trips` | UUID `id`; required `plan_revision_id` and `vehicle_id`; nullable `driver_id` user reference; integer `trip_number` of 1 or 2; `status` defaults to `PLANNED`. Unique `(plan_revision_id, vehicle_id, trip_number)`. |
+| `trip_stops` | UUID `id`; required `trip_id` and `outlet_id`; positive integer `sequence_number`; nullable timezone-aware `planned_arrival_time`; `status` defaults to `PLANNED`. Unique `(trip_id, sequence_number)` and `(trip_id, outlet_id)`. |
+
+The explicit depot on a plan supports the existing Dispatcher scope model. One
+workspace per depot/date prevents duplicate planning workspaces; alternatives
+belong in numbered revisions. UUIDs are application-generated. All foreign keys
+use `ON DELETE RESTRICT`, and each has an index or leading unique-constraint
+column for lookups. Existing identity, fleet and order records are not altered.
+
+Plan and revision statuses are `DRAFT`/`PUBLISHED`. A revision's `published_at`
+must be null for `DRAFT` and non-null for `PUBLISHED`. The plan status is intended
+as a publication summary; consistency with its revisions requires the future
+publish service. Revision numbers are positive/unique but need not be contiguous.
+There is no current-revision pointer; choosing the effective published revision
+and avoiding concurrent publication conflicts are service responsibilities.
+
+Trips use the shared `PLANNED`, `LOADING`, `READY`, `IN_PROGRESS`, `COMPLETED`
+statuses. The optional driver reference enables later assignment; it does not
+validate a user's role/activity or grant trip access. Stop statuses are `PLANNED`,
+`ARRIVED`, `DELIVERED`, `FAILED`, also exported by shared types. Transition checks,
+failure evidence, order-to-stop assignments and deferral decisions are not yet
+implemented. A stop is one outlet visit, not one order. Several orders may later
+map to a stop; another trip may visit the same outlet.
+
+`planned_arrival_time` includes both date and timezone (PostgreSQL `TIMESTAMPTZ`),
+so a stop can fall after midnight. It can remain null until scheduling computes
+it. Stop sequence numbers are positive/unique within a trip; contiguous ordering
+is a later validation rule. Creation/publication timestamps are also timezone-aware.
+
+Trip slots enforce **at most two trips per vehicle per revision**, not the daily
+operational limit across alternative published revisions or depot plans. The
+future publisher must enforce the effective revision, complete-day limits,
+home-depot compatibility, driver authorization and planning constraints.
+Published revision immutability is not enforced by these storage checks; future
+services must prohibit edits and create new revisions. No planning routes are
+mounted yet, so the tables do not expose a public bypass for these checks.
+
+See the [planning migration guide](../../apps/api/app/planning/README.md).
+Downgrade to `0004_user_scopes` drops these four tables and planning data only;
+rollback/reapply checks use disposable databases.
+
 All implemented model modules are registered in `apps/api/app/db/models.py` for Alembic.
 Table creation is performed by explicit migrations, never at API startup.
 
@@ -224,6 +273,7 @@ created_at
 ### plans
 ```text
 id
+depot_id
 delivery_date
 status
 created_by
@@ -244,6 +294,7 @@ published_at
 id
 plan_revision_id
 vehicle_id
+driver_id (nullable)
 trip_number
 status
 ```
@@ -293,8 +344,10 @@ received_at
 
 ## Planned workflow invariants
 
-These are requirements for later workflow and planning increments, not rules
-implemented by the current identity and fleet migrations.
+These are requirements for later workflow and planning increments. The current
+planning migration enforces references, allowed values, revision/sequence
+uniqueness and two trip slots per vehicle/revision; it does not enforce these
+complete operational rules.
 
 - `sync_events.event_id` unique
 - max 2 trips per vehicle/day

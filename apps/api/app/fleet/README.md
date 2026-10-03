@@ -40,7 +40,8 @@ use `Cache-Control: no-store`; database failures return a generic 503. The route
 reads master data only: a weekly quota is not remaining fuel, and listed vehicles
 are not necessarily available or compatible with a plan. Vehicle availability,
 fuel usage tracking, write endpoints and planning enforcement remain pending.
-No new migration is added; apply existing head `0004_user_scopes`.
+The fleet read API requires at least migration `0004_user_scopes`; apply the
+current head shown in the root README when updating the backend.
 
 See the [exact contract](../../../../docs/architecture/API-CONTRACTS.md#fleet-list).
 `tests/test_dispatcher_api.py` checks authorization, depot isolation, filters,
