@@ -4,25 +4,39 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Card } from '../../components/ui/Card';
 import { Pill } from '../../components/ui/Pill';
+import { StatusBanner } from '../../components/ui/StatusBanner';
+import { useIsOffline } from '../../hooks/useIsOffline';
 import { t } from '../../theme/loaderTokens';
 
-const gates: {
+// Flip to true to preview the failed-gate design.
+const SIMULATE_FAILED_GATE = false;
+
+type Gate = {
   title: string;
   note: string;
   icon: keyof typeof Ionicons.glyphMap;
-  done: boolean;
-}[] = [
-  { title: 'Cargo locked & strapped', note: 'Barriers & load bars locked', icon: 'lock-closed-outline', done: true },
-  { title: 'Reefer set-point confirmed', note: '+4°C verified on logger #TM-04', icon: 'snow-outline', done: true },
-  { title: 'Rear shutter seal intact', note: 'Tamper tag #SL-99420 recorded', icon: 'pricetag-outline', done: true },
+  status: 'pass' | 'fail';
+};
+
+const gates: Gate[] = [
+  { title: 'Cargo locked & strapped', note: 'Barriers & load bars locked', icon: 'lock-closed-outline', status: 'pass' },
+  SIMULATE_FAILED_GATE
+    ? { title: 'Reefer set-point breach', note: 'Logger #TH-04 reads +12°C — required set-point +4°C for this chilled trip.', icon: 'warning-outline', status: 'fail' }
+    : { title: 'Reefer set-point confirmed', note: '+4°C verified on logger #TM-04', icon: 'snow-outline', status: 'pass' },
+  { title: 'Rear shutter seal intact', note: 'Tamper tag #SL-99420 recorded', icon: 'pricetag-outline', status: 'pass' },
 ];
 
 export default function DepartScreen() {
-  const passed = gates.filter((g) => g.done).length;
+  const offline = useIsOffline();
+  const passed = gates.filter((g) => g.status === 'pass').length;
   const allPassed = passed === gates.length;
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+      {offline && (
+        <StatusBanner message="No connection — sign-off will be recorded locally and sync automatically." />
+      )}
+
       <Text style={styles.title}>Ready To Depart</Text>
 
       {/* Vehicle */}
@@ -70,8 +84,8 @@ export default function DepartScreen() {
         </View>
       </Card>
 
-      {/* Acknowledged issue */}
-      <Card>
+      {/* Acknowledged issue (amber outline while offline: approval not yet synced) */}
+      <Card style={offline ? styles.issueCardOffline : undefined}>
         <View style={styles.spread}>
           <View style={[styles.row, { flex: 1 }]}>
             <Ionicons name="warning-outline" size={18} color="#F59E0B" />
@@ -108,40 +122,54 @@ export default function DepartScreen() {
             <Ionicons name="shield-checkmark-outline" size={18} color={t.blue} />
             <Text style={styles.cardTitle}>Inspection Gates</Text>
           </View>
-          <Pill label={`${passed} of ${gates.length} Passed`} tone="green" />
+          <Pill
+            label={`${passed} of ${gates.length} Passed`}
+            tone={allPassed ? 'green' : 'red'}
+            icon={allPassed ? undefined : 'ellipse'}
+          />
         </View>
 
         <View style={{ gap: 8, marginTop: 12 }}>
-          {gates.map((g) => (
-            <View key={g.title} style={styles.gate}>
-              <Ionicons
-                name={g.done ? 'checkmark-circle' : 'ellipse-outline'}
-                size={24}
-                color={g.done ? t.green : '#CBD5E1'}
-              />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.gateTitle}>{g.title}</Text>
-                <Text style={styles.mutedSmall}>{g.note}</Text>
+          {gates.map((g) => {
+            const failed = g.status === 'fail';
+            return (
+              <View key={g.title} style={[styles.gate, failed && styles.gateFail]}>
+                <Ionicons
+                  name={failed ? 'close-circle' : 'checkmark-circle'}
+                  size={24}
+                  color={failed ? t.red : t.green}
+                />
+                <View style={{ flex: 1, gap: 2 }}>
+                  <View style={[styles.row, { flexWrap: 'wrap', gap: 6 }]}>
+                    <Text style={[styles.gateTitle, failed && { color: '#991B1B' }]}>{g.title}</Text>
+                    {failed ? <Pill label="FAILED" tone="red" solid /> : null}
+                  </View>
+                  <Text style={[styles.mutedSmall, failed && { color: t.red }]}>{g.note}</Text>
+                </View>
+                <View style={failed ? styles.failIcon : undefined}>
+                  <Ionicons name={g.icon} size={18} color={failed ? t.red : '#94A3B8'} />
+                </View>
               </View>
-              <Ionicons name={g.icon} size={18} color="#94A3B8" />
-            </View>
-          ))}
+            );
+          })}
         </View>
       </Card>
 
       <Pressable
         disabled={!allPassed}
         onPress={() => {
-          // TODO: call depart API / navigate
+          // TODO: depart API call; when offline, queue it locally and sync later
         }}
-        style={({ pressed }) => [
-          styles.cta,
-          !allPassed && { opacity: 0.4 },
-          pressed && { opacity: 0.85 },
-        ]}
+        style={({ pressed }) => [styles.cta, !allPassed && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}
       >
         <Ionicons name="navigate-outline" size={18} color="#fff" />
-        <Text style={styles.ctaText}>Release Vehicle to Depart</Text>
+        <Text style={styles.ctaText}>
+          {!allPassed
+            ? 'Resolve failed gate to depart'
+            : offline
+              ? 'Sign Off & Depart (saves offline)'
+              : 'Release Vehicle to Depart'}
+        </Text>
       </Pressable>
     </ScrollView>
   );
@@ -167,13 +195,14 @@ const styles = StyleSheet.create({
   statValue: { fontSize: 26, fontWeight: '800', color: '#fff' },
   statUnit: { fontSize: 14, fontWeight: '500', color: '#94A3B8' },
   cardTitle: { fontSize: 15, fontWeight: '700', color: t.text, flexShrink: 1 },
+  issueCardOffline: { backgroundColor: t.amberSoft, borderColor: '#FDE68A' },
   issueBox: {
     marginTop: 12, backgroundColor: '#F8FAFC', borderRadius: 12,
     borderWidth: 1, borderColor: t.border, padding: 12, gap: 6,
   },
   orderId: { fontSize: 15, fontWeight: '800', color: t.text },
   muted: { fontSize: 13, color: t.muted },
-  mutedSmall: { fontSize: 12, color: t.muted },
+  mutedSmall: { fontSize: 12, color: t.muted, lineHeight: 17 },
   approved: {
     flexDirection: 'row', gap: 8, alignItems: 'center',
     backgroundColor: t.greenSoft, borderWidth: 1, borderColor: '#BBF7D0',
@@ -185,7 +214,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1,
     borderColor: t.border, padding: 12,
   },
+  gateFail: { backgroundColor: t.redSoft, borderColor: '#FECACA' },
   gateTitle: { fontSize: 15, fontWeight: '700', color: t.text },
+  failIcon: {
+    width: 32, height: 32, borderRadius: 8, backgroundColor: t.redBg,
+    alignItems: 'center', justifyContent: 'center',
+  },
   cta: {
     flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center',
     backgroundColor: t.blue, borderRadius: 14, paddingVertical: 16, marginTop: 4,

@@ -6,7 +6,9 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Card } from '../../components/ui/Card';
 import { Pill, type PillTone } from '../../components/ui/Pill';
 import { t } from '../../theme/loaderTokens';
-
+import { useEffect } from 'react'; // merge into your existing 'react' import
+import { StatusBanner } from '../../components/ui/StatusBanner';
+import { useIsOffline } from '../../hooks/useIsOffline';
 type Stop = {
   id: string;
   order: string; // "LOAD 1ST · DEEPEST"
