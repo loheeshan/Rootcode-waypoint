@@ -13,8 +13,9 @@ type Props = {
   windowEnd: string;
   eta: string;
   completedStops: number;
-  variant?: "range" | "recorded" | "departed";
+  variant?: "range" | "recorded" | "recordedStops" | "departed";
   departedAt?: string;
+  wrapTitle?: boolean;
 };
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -31,6 +32,7 @@ export function StopHeroCard({
   completedStops,
   variant = "range",
   departedAt,
+  wrapTitle = false,
 }: Props) {
   const remaining = Math.max(stopTotal - stopNo, 0);
   const isLast = stopNo >= stopTotal;
@@ -42,23 +44,29 @@ export function StopHeroCard({
           mid: `Stop ${stopNo}`,
           right: isLast ? "Final stop" : `${remaining} Stops Remaining`,
         }
-      : variant === "recorded"
+      : variant === "recordedStops"
         ? {
             left: `${completedStops} recorded`,
             mid: `Stop ${stopNo}`,
-            right: isLast ? "Final stop" : `${remaining} remaining`,
-          }
-        : {
-            left:
-              completedStops > 0
-                ? `Stop 01–${pad(completedStops)} Complete`
-                : "No stops complete",
-            mid: `Stop ${pad(stopNo)} Active`,
             right: isLast ? "Final stop" : `${remaining} Stops Remaining`,
-          };
+          }
+        : variant === "recorded"
+          ? {
+              left: `${completedStops} recorded`,
+              mid: `Stop ${stopNo}`,
+              right: isLast ? "Final stop" : `${remaining} remaining`,
+            }
+          : {
+              left:
+                completedStops > 0
+                  ? `Stop 01–${pad(completedStops)} Complete`
+                  : "No stops complete",
+              mid: `Stop ${pad(stopNo)} Active`,
+              right: isLast ? "Final stop" : `${remaining} Stops Remaining`,
+            };
 
-  // "recorded" and "departed" show a plain track, like the design
-  const plainBar = variant === "recorded" || variant === "departed";
+  // every wording except the original "range" one shows a plain track, like the designs
+  const plainBar = variant !== "range";
 
   return (
     <LinearGradient colors={[N.heroTop, N.heroBottom]} style={styles.card}>
@@ -72,7 +80,12 @@ export function StopHeroCard({
         <Text style={styles.code}>{outletCode}</Text>
       </View>
 
-      <Text style={styles.title} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
+      <Text
+        style={styles.title}
+        numberOfLines={wrapTitle ? 2 : 1}
+        adjustsFontSizeToFit={!wrapTitle}
+        minimumFontScale={0.75}
+      >
         {outletName}
       </Text>
       <View style={styles.addressRow}>

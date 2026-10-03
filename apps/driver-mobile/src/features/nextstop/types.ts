@@ -24,5 +24,7 @@ export type NextStopSnapshot = {
   mapMeta: string; // e.g. "1.8 MI | 8 MIN"
   gpsLabel: string; // e.g. "Strong"
   kmLeft: number;
-  progressVariant?: "range" | "recorded" | "departed" ;
+  progressVariant?: "range" | "recorded" | "recordedStops" | "departed"; // wording of the progress row; defaults to "range"
+  departedAt?: string; // e.g. "03:30", used by the "departed" wording
+  wrapTitle?: boolean; // true = the outlet name may wrap onto two lines instead of shrinking
 };
