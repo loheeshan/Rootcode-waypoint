@@ -1,7 +1,6 @@
-"""Fleet master-data definitions for the next database migration.
+"""Fleet master data registered in app.db.models for Alembic.
 
-Register these models in app.db.models together with their migration. Vehicle
-availability, fuel consumption records and planning constraints are separate work.
+Vehicle availability, fuel consumption records and planning constraints are separate work.
 """
 
 from __future__ import annotations
