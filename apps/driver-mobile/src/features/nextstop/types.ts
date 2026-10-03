@@ -24,4 +24,5 @@ export type NextStopSnapshot = {
   mapMeta: string; // e.g. "1.8 MI | 8 MIN"
   gpsLabel: string; // e.g. "Strong"
   kmLeft: number;
+  progressVariant?: "range" | "recorded";
 };

@@ -13,6 +13,7 @@ type Props = {
   windowEnd: string;
   eta: string;
   completedStops: number;
+  variant?: "range" | "recorded";
 };
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -27,10 +28,25 @@ export function StopHeroCard({
   windowEnd,
   eta,
   completedStops,
+  variant = "range",
 }: Props) {
   const remaining = Math.max(stopTotal - stopNo, 0);
-  const completeText =
-    completedStops > 0 ? `Stop ${pad(1)}–${pad(completedStops)} Complete` : "No stops complete";
+
+  const labels =
+    variant === "recorded"
+      ? {
+          left: `${completedStops} recorded`,
+          mid: `Stop ${stopNo}`,
+          right: `${remaining} remaining`,
+        }
+      : {
+          left:
+            completedStops > 0
+              ? `Stop 01–${pad(completedStops)} Complete`
+              : "No stops complete",
+          mid: `Stop ${pad(stopNo)} Active`,
+          right: `${remaining} Stops Remaining`,
+        };
 
   return (
     <LinearGradient colors={[N.heroTop, N.heroBottom]} style={styles.card}>
@@ -44,7 +60,9 @@ export function StopHeroCard({
         <Text style={styles.code}>{outletCode}</Text>
       </View>
 
-      <Text style={styles.title}>{outletName}</Text>
+      <Text style={styles.title} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
+        {outletName}
+      </Text>
       <View style={styles.addressRow}>
         <MaterialCommunityIcons name="map-marker-outline" size={18} color="#8C97C4" />
         <Text style={styles.address} numberOfLines={1}>
@@ -70,15 +88,20 @@ export function StopHeroCard({
 
       <View style={styles.progressWrap}>
         <View style={styles.progressLabels}>
-          <Text style={styles.progressMuted}>{completeText}</Text>
-          <Text style={styles.progressActive}>Stop {pad(stopNo)} Active</Text>
-          <Text style={styles.progressMuted}>{remaining} Stops Remaining</Text>
+          <Text style={styles.progressMuted}>{labels.left}</Text>
+          <Text style={styles.progressActive}>{labels.mid}</Text>
+          <Text style={styles.progressMuted}>{labels.right}</Text>
         </View>
-        <View style={styles.bar}>
-          <View style={{ flex: Math.max(completedStops, 0), backgroundColor: "#4C6FF0" }} />
-          <View style={{ flex: 1, backgroundColor: "#fff" }} />
-          <View style={{ flex: Math.max(remaining, 0) }} />
-        </View>
+
+        {variant === "recorded" ? (
+          <View style={styles.bar} />
+        ) : (
+          <View style={styles.bar}>
+            <View style={{ flex: Math.max(completedStops, 0), backgroundColor: "#4C6FF0" }} />
+            <View style={{ flex: 1, backgroundColor: "#fff" }} />
+            <View style={{ flex: Math.max(remaining, 0) }} />
+          </View>
+        )}
       </View>
     </LinearGradient>
   );
