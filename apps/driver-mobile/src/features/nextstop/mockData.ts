@@ -37,3 +37,17 @@ export const mockNextStopAfterSave: NextStopSnapshot = {
   completedStops: 4,
   progressVariant: "recorded",
 };
+
+// TODO(feature/driver-sqlite): the final stop is read from SQLite once every earlier stop has a record
+export const mockNextStopLast: NextStopSnapshot = {
+  ...mockNextStop,
+  stopNo: 7,
+  outletCode: "OUT029",
+  outletName: "OUT029 Glomark Kotte",
+  address: "Kotte · rear receiving dock",
+  windowStart: "08:30",
+  windowEnd: "09:15",
+  eta: "08:42",
+  completedStops: 5,
+  progressVariant: "recorded",
+};
