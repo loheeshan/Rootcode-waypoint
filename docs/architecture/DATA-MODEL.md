@@ -110,7 +110,8 @@ fleet CRUD endpoints or authorization rules yet.
 - `outlet_id`: required indexed foreign key to `outlets.id`. An outlet with
   orders cannot be deleted; deleting an order does not delete its outlet.
 - `requested_delivery_date`: required indexed `DATE`, interpreted on the local
-  Asia/Colombo calendar. Multiple orders per outlet/date are allowed.
+  Asia/Colombo calendar. Store submission persists the accepted date after the
+  16:00 cutoff adjustment. Multiple orders per outlet/date are allowed.
 - `temperature_requirement`: required `ambient` or `chilled`.
 - `order_weight_kg` and `order_volume_m3`: required `NUMERIC(12, 3)`, greater than
   zero and less than 1,000,000,000, rejecting NaN and infinity.
@@ -120,8 +121,10 @@ fleet CRUD endpoints or authorization rules yet.
 - `created_at`: required timezone-aware timestamp, defaulting to database time.
 
 The migration starts the order table empty and preserves existing identity and
-fleet records. It does not implement order endpoints, cutoff handling, status
-transitions, or permission checks. Those belong to the API/service increments.
+fleet records. The Store create/list/detail API now applies role/outlet checks
+and next-day cutoff handling. Original requested date and cutoff flag are only
+returned in the create response; the existing column retains the accepted date.
+Order status transitions and receipt processing remain separate future work.
 
 All implemented model modules are registered in `apps/api/app/db/models.py` for Alembic.
 Table creation is performed by explicit migrations, never at API startup.

@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 from app.auth.router import router as auth_router
 from app.core.config import get_settings
 from app.health import router as health_router
+from app.orders.router import router as store_orders_router
 
 
 def create_app() -> FastAPI:
@@ -21,6 +22,7 @@ def create_app() -> FastAPI:
     application.include_router(health_router)
     application.include_router(health_router, prefix="/api/v1")
     application.include_router(auth_router, prefix="/api/v1")
+    application.include_router(store_orders_router, prefix="/api/v1")
 
     @application.exception_handler(RequestValidationError)
     async def validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:

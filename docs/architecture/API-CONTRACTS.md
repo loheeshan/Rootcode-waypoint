@@ -2,8 +2,9 @@
 
 ## Implementation status
 
-Authentication routes below are implemented. Store, Dispatcher, Loader and
-Driver business routes remain planned. The API also exposes `GET /health`,
+Authentication and Store order create/list/detail routes are implemented.
+Store receipt, Dispatcher, Loader and Driver business routes remain planned.
+The API also exposes `GET /health`,
 `GET /ready`, and the same checks under `/api/v1`. Health returns `status`,
 `service`, and `version`; readiness returns 200 when PostgreSQL is reachable
 and 503 otherwise. Demo accounts can be created explicitly with the
@@ -96,6 +97,100 @@ POST /api/v1/store/orders
 GET  /api/v1/store/orders/{order_id}
 POST /api/v1/store/orders/{order_id}/receipt
 ```
+
+The first three routes are implemented; receipt confirmation is still planned.
+Every implemented Store route requires bearer authentication and `STORE_MANAGER`.
+Assignments are reloaded on each request. A depot grant alone never grants Store
+outlet access. There is no role-only bypass for Dispatcher/Driver/Loader.
+
+### Create an order
+
+`POST /api/v1/store/orders` accepts JSON with these five required fields:
+
+```json
+{
+  "outlet_id": "<UUID from /me outlet_ids>",
+  "requested_delivery_date": "2026-10-05",
+  "temperature_requirement": "chilled",
+  "order_weight_kg": "125.125",
+  "order_volume_m3": "0.875"
+}
+```
+
+Use a future date in `YYYY-MM-DD` format. Temperature must be `ambient` or
+`chilled`. Weight and volume accept decimal strings or JSON numbers, must be
+finite and positive, have at most three fractional digits, and be below
+1,000,000,000. String inputs are recommended to avoid client floating-point
+rounding. IDs, status and timestamps are server-owned; extra fields are rejected.
+
+The supplied outlet must be assigned to the user. Successful creation returns
+201 and `Location: /api/v1/store/orders/<id>`:
+
+```json
+{
+  "order": {
+    "id": "<server UUID>",
+    "outlet_id": "<assigned outlet UUID>",
+    "requested_delivery_date": "2026-10-05",
+    "temperature_requirement": "chilled",
+    "order_weight_kg": "125.125",
+    "order_volume_m3": "0.875",
+    "status": "CONFIRMED",
+    "created_at": "2026-10-03T11:00:00Z"
+  },
+  "submitted_delivery_date": "2026-10-04",
+  "cutoff_applied": true
+}
+```
+
+This response illustrates a next-day request submitted after the cutoff.
+Cutoff is 16:00 in `Asia/Colombo`, evaluated on the server. Before 16:00 tomorrow
+is accepted; at or after 16:00 a request for tomorrow moves one calendar day
+later. Requests for later dates are unchanged. Same-day/past requests return 422.
+No weekend/holiday calendar is defined, so every calendar day is eligible.
+
+`order.requested_delivery_date` stores the **accepted** date after this adjustment
+and is the date used by list/detail and future planning. The original input is
+returned as `submitted_delivery_date` with `cutoff_applied` for the confirmation
+screen; that submission metadata is not stored in the current schema. An accepted
+order is `CONFIRMED`, not a guarantee that optimization can serve it.
+
+### List and detail
+
+`GET /api/v1/store/orders` accepts optional `outlet_id`, `status`, and
+`requested_delivery_date` filters. The date filter matches the accepted date.
+Pagination uses `limit` (default 20, range 1–100) and `offset` (default 0, at least 0).
+It returns `{"items":[<order>],"total":1,"limit":20,"offset":0}`. Both items and
+total are scoped in SQL to currently assigned outlets. Results sort by creation
+time descending, then UUID descending. Pagination can move as new orders arrive.
+An unassigned account receives an empty list; an explicit unauthorized outlet
+filter returns 403. No-match lists return 200 with an empty `items` array.
+
+`GET /api/v1/store/orders/{order_id}` returns the order object directly. Missing
+and other-outlet order IDs both return 404 with `{"detail":"Order not found"}`.
+All successful responses use `Cache-Control: no-store`. Response quantities are
+strings with three decimal places; `created_at` is a UTC timestamp.
+
+| Status | Meaning |
+|---|---|
+| 401 | Missing/invalid token or inactive account |
+| 403 | Incorrect role or unassigned create/filter outlet |
+| 404 | Order absent or outside current outlet assignments |
+| 409 | Insert integrity conflict; refresh outlet access before retrying |
+| 422 | Invalid fields, query/path values, or same-day/past delivery date |
+| 503 | Authentication or order database operation unavailable |
+
+Order database failures return `{"detail":"Orders unavailable"}` without SQL
+or connection details. Creation conflicts return
+`{"detail":"Order could not be created; refresh outlet access"}`. Same-day/past
+requests return `{"detail":"Delivery date must be after today in Asia/Colombo"}`;
+field validation uses the existing sanitized 422 error array.
+
+Creation is not idempotent: each successful POST creates an order. Clients must
+not automatically retry a POST after an uncertain network outcome; refresh the
+list first. Idempotency keys, status mutations and receipt submission are future
+increments. Shared types are `OrderCreateRequest`, `OrderResponse`,
+`OrderCreateResponse` and `OrderListResponse` in `@waypoint/api-contracts`.
 
 ## Dispatcher
 

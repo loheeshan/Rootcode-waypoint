@@ -34,7 +34,8 @@ def test_readiness_checks_the_database() -> None:
 
 
 def test_business_routes_are_not_fake_successes() -> None:
-    assert client.get("/api/v1/store/orders").status_code == 404
+    assert client.get("/api/v1/store/orders").status_code == 401
+    assert client.get("/api/v1/dispatcher/orders").status_code == 404
 
 
 def test_cors_only_accepts_configured_web_origins() -> None:
