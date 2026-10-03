@@ -79,6 +79,22 @@ export interface FleetListResponse {
   offset: number;
   depots: DepotResponse[];
 }
+export interface AvailabilityWriteRequest { is_available: boolean }
+export interface FuelUsageWriteRequest { fuel_used_l: string }
+export interface VehicleAvailabilityResponse {
+  id: string;
+  vehicle_id: string;
+  created_at: string;
+  availability_date: string;
+  is_available: boolean;
+}
+export interface VehicleFuelUsageResponse {
+  id: string;
+  vehicle_id: string;
+  created_at: string;
+  usage_date: string;
+  fuel_used_l: string;
+}
 export interface DispatcherOrderResponse extends OrderResponse {
   outlet: OutletResponse;
   depot: DepotResponse;
@@ -123,20 +139,30 @@ export interface PlanListResponse {
 export class ApiError extends Error {
   constructor(public readonly status: number, message: string) { super(message); this.name = 'ApiError'; }
 }
+export interface ApiResponse<T> {
+  data: T;
+  status: number;
+  etag: string | null;
+  location: string | null;
+}
 /** Tokens are provided by the caller; this module never stores credentials. */
 export function createApiClient(baseUrl: string, getToken?: () => Promise<string | null>) {
   const base = baseUrl.replace(/\/$/, '');
+  async function requestWithMetadata<T>(path: string, init: RequestInit = {}): Promise<ApiResponse<T>> {
+    if (!path.startsWith('/') || path.startsWith('//')) throw new Error('API paths must start with a single slash');
+    const headers = new Headers(init.headers);
+    const token = await getToken?.();
+    if (token) headers.set('Authorization', 'Bearer ' + token);
+    if (typeof init.body === 'string' && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
+    const response = await fetch(base + path, { ...init, headers });
+    if (!response.ok) throw new ApiError(response.status, 'API request failed (' + response.status + ')');
+    const data = response.status === 204 ? undefined as T : await response.json() as T;
+    return { data, status: response.status, etag: response.headers.get('ETag'), location: response.headers.get('Location') };
+  }
   return {
+    requestWithMetadata,
     async request<T>(path: string, init: RequestInit = {}): Promise<T> {
-      if (!path.startsWith('/') || path.startsWith('//')) throw new Error('API paths must start with a single slash');
-      const headers = new Headers(init.headers);
-      const token = await getToken?.();
-      if (token) headers.set('Authorization', 'Bearer ' + token);
-      if (typeof init.body === 'string' && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
-      const response = await fetch(base + path, { ...init, headers });
-      if (!response.ok) throw new ApiError(response.status, 'API request failed (' + response.status + ')');
-      if (response.status === 204) return undefined as T;
-      return response.json() as Promise<T>;
+      return (await requestWithMetadata<T>(path, init)).data;
     },
   };
 }

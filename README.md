@@ -31,9 +31,10 @@ Store order creation, listing and detail endpoints enforce outlet access and the
 Dispatcher order listing and fleet reads now enforce depot assignments, with
 filters, pagination and shared frontend response types. See the
 [Dispatcher contract](docs/architecture/API-CONTRACTS.md#dispatcher).
-Daily availability and fuel usage have database storage; public input endpoints
-and planning enforcement are still pending. Missing records mean unknown, not
-available or zero usage. See the [fleet input rules](apps/api/app/fleet/README.md#daily-operational-inputs).
+Dispatchers can read and conditionally create/replace daily vehicle availability
+and consumed-fuel totals in their assigned depots. Missing records mean unknown,
+not available or zero usage. Planning enforcement remains pending. See the
+[fleet input API](apps/api/app/fleet/README.md#daily-input-api) for the GET/PUT flow.
 Planning storage supports depot/day workspaces, revisions, vehicle/driver trip
 references and ordered stops. Order outcomes can link served orders to stops or
 store deferral explanations, with database checks for reference consistency and

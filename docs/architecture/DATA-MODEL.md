@@ -87,9 +87,9 @@ it preserves matching rows and rejects conflicting data without overwriting it.
 | `weekly_fuel_quota_l` | `NUMERIC(12, 3)` | At least 0 and less than 1,000,000,000 litres |
 
 These fields store three decimal places and reject NaN and infinity. A zero fuel
-quota is allowed. Daily consumption storage is implemented below. Public input
-services, remaining-fuel calculations and enforcing the quota during planning
-remain future work.
+quota is allowed. Daily consumption storage and conditional input APIs are
+implemented below. Remaining-fuel calculations and enforcing the quota during
+planning remain future work.
 
 Outlet delivery rules:
 
@@ -111,7 +111,8 @@ Fleet storage enforces field and foreign-key constraints. Daily availability
 and fuel records are defined below; route allocation and planning rules are
 not implemented. `GET /api/v1/fleet` provides Dispatcher-only vehicle
 reads scoped to current depot assignments, including assigned depot choices.
-There are no public fleet write endpoints. The read API adds no schema changes.
+Separate depot-scoped daily-input endpoints support availability/fuel writes;
+there are no public master-data write endpoints. These APIs add no schema changes.
 
 ### Daily vehicle availability and fuel usage
 
@@ -138,9 +139,15 @@ Vehicle foreign keys use `RESTRICT`, including deletion through the ORM with
 relationships loaded. Removing a daily row never deletes the vehicle. Unique
 keys start with `vehicle_id`, supporting both FK lookups and date-range reads.
 UUIDs are application-generated. Creation timestamps do not track later changes.
-Public write/read DTOs, audit/concurrency policies and planner integration remain
-future work. No records are inserted by this migration or the demo seeds; current
-fleet and plan APIs retain their existing response shapes.
+Dispatcher daily GET/PUT APIs now expose these records with depot scope. Writes
+require create-only or current-state preconditions and hold the vehicle row lock
+through the PostgreSQL transaction. Content-hash ETags detect changed values;
+they are not monotonic edit versions or an audit history. Fuel writes reject
+future Colombo dates; availability permits historical/future dates. Audit history,
+weekly calculations and planner integration remain future work. No records are
+inserted by this migration or demo seeds; the master fleet list and plan APIs
+retain their existing response shapes. See the
+[daily API contract](API-CONTRACTS.md#daily-fleet-inputs).
 
 Downgrading to `0006_plan_outcomes` drops only these two tables and their data,
 preserving all 15 earlier tables. Reapplying creates empty tables. See the

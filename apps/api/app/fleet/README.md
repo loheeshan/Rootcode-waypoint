@@ -41,8 +41,9 @@ All numeric vehicle fields use fixed three-decimal strings. Successful responses
 use `Cache-Control: no-store`; database failures return a generic 503. The route
 reads master data only: a weekly quota is not remaining fuel, and listed vehicles
 are not necessarily available or compatible with a plan. Daily availability and
-consumed-fuel storage now exist, but this route does not read them. Write endpoints,
-remaining-fuel calculations and planning enforcement remain pending.
+consumed-fuel storage now exist, but this route does not read them. Separate
+daily-input endpoints are documented below. Remaining-fuel calculations and
+planning enforcement remain pending.
 The fleet read API requires at least migration `0004_user_scopes`; apply the
 current head shown in the root README when updating the backend.
 
@@ -85,9 +86,9 @@ Future quota validation must account for both without counting completed trips
 twice, handle unknown/incomplete input, and coordinate concurrent updates and
 publishing. Storage permits actual usage above the quota so real consumption is
 not lost. It does not claim that such consumption is a feasible plan. Timestamps
-record row creation, not the time a corrected total was last verified. Future
-input services must provide authorization, validation, safe concurrent writes
-and any required audit trail; there are no public daily-input endpoints yet.
+record row creation, not the time a corrected total was last verified. The input
+API below provides role/depot authorization and conditional writes. Edit history
+and an audit trail are not yet implemented; these records hold the current value.
 
 Apply from `D:\Rootcode`:
 
@@ -108,6 +109,76 @@ tests compare the migration with the registered models.
 Downgrading to `0006_plan_outcomes` removes only these two tables and their daily
 records. Test rollback only in a disposable database; reapplying the migration
 recreates empty tables and cannot restore those records.
+
+## Daily input API
+
+```text
+GET /api/v1/fleet/{vehicle_id}/availability/{availability_date}
+PUT /api/v1/fleet/{vehicle_id}/availability/{availability_date}
+GET /api/v1/fleet/{vehicle_id}/fuel-usage/{usage_date}
+PUT /api/v1/fleet/{vehicle_id}/fuel-usage/{usage_date}
+```
+
+All four routes require an active Dispatcher token and a current depot grant for
+the vehicle. Missing/foreign vehicles both return `404 Vehicle not found`. Depot
+grants do not bypass the role check, and outlet grants confer no vehicle access.
+Any Dispatcher assigned to the depot may correct its inputs. Reads and writes
+use current vehicle depot ownership, not the original input creator's identity.
+
+Path dates must be `YYYY-MM-DD`. Availability may be recorded for historical or
+future days. Fuel records contain actual consumption, so writes allow today or
+past dates in Asia/Colombo; future dates return 422. Historical corrections and
+fuel totals above quota are allowed. No quota/route feasibility verdict is implied.
+
+PUT accepts exactly `{"is_available":true}` or `{"fuel_used_l":"12.345"}`.
+Availability requires a JSON boolean. Fuel requires a nonnegative decimal
+**string** with at most three decimal places and the storage bounds above;
+numbers, exponents, whitespace, NaN/infinity and extra fields are rejected.
+Fuel writes replace the whole day's total. Do not submit a single trip's amount
+as though it were the daily total.
+
+For an accessible vehicle, GET returns 404 when the day's input has not been
+recorded. It never supplies a default true or zero. Successful GET returns the
+stored `id`, `vehicle_id`, UTC `created_at`, local date field and value. Fuel is
+formatted with three decimal places. It also returns a quoted strong `ETag`.
+
+Every PUT requires one precondition:
+
+1. To create an unrecorded day, send `If-None-Match: *`. Success returns 201 and
+   `Location`; an existing row returns 412.
+2. To correct a recorded day, GET first and send its exact quoted tag in
+   `If-Match`. Success returns 200; a missing or changed record returns 412.
+3. After success, GET again before another edit. PUT returns the normalized,
+   enriched DTO but no ETag because its representation differs from the submitted
+   body, following [HTTP PUT validator rules](https://www.rfc-editor.org/rfc/rfc9110.html#section-9.3.4).
+
+No precondition returns 428. Both headers, duplicate header lines, weak tags,
+lists of tags, or `If-Match: *` return 400. A 412 requires reloading and reviewing
+the latest value; do not automatically retry with a fresh tag. An identical
+replacement leaves the GET tag unchanged. Tags hash the current representation,
+not an edit counter: restoring an earlier value can restore its earlier tag.
+
+PostgreSQL locks the scoped vehicle row before reading the day's input and holds
+that lock through comparison, write and commit. Concurrent writes for a vehicle
+are serialized; when two writes change the same starting state, one succeeds and
+the other gets 412. This guarantee uses PostgreSQL's default READ COMMITTED
+isolation and row locks. SQLite tests cover sequential behavior only; concurrent
+writes are verified with real PostgreSQL sessions. Failed writes roll back.
+Other integrity conflicts return a generic 409; database failures return a
+sanitized 503. Successful responses and domain errors use `Cache-Control: no-store`.
+
+CORS permits `If-Match`/`If-None-Match` and exposes `ETag`/`Location` to configured
+web origins. Shared `createApiClient.requestWithMetadata<T>()` returns
+`{data, status, etag, location}` on success; the original `request<T>()` still
+returns only the data. HTTP failures remain `ApiError` with the status.
+See the [exact contract and client example](../../../../docs/architecture/API-CONTRACTS.md#daily-fleet-inputs).
+
+Tests in `tests/test_fleet_inputs_api.py` cover input formats, missing records,
+depot/role revocation, stale edits, transaction rollback and PostgreSQL concurrent
+creates/replacements. No additional migration is needed beyond `0007_fleet_operations`.
+The master fleet list, weekly balance calculation, seeds, plans and published
+trips are not changed by these writes. Planner integration and auditing remain
+separate work.
 
 ## Synthetic demo data
 

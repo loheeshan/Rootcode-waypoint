@@ -3,14 +3,15 @@
 ## Implementation status
 
 Authentication, Store order create/list/detail, Dispatcher order listing, fleet
-reads, and plan create/list/detail routes are implemented. Store receipt,
+reads, daily fleet input GET/PUT, and plan create/list/detail routes are implemented. Store receipt,
 optimization, publishing, live operations, Loader and Driver routes remain planned.
 Migration `0005_planning_foundation` adds storage for plans, revisions, trips and
 stops. Plan workspace APIs now use this storage; allocation/publishing remain pending.
 Migration `0006_plan_outcomes` adds order result and deferral reason storage,
 without new routes or changes to existing order JSON/status behavior.
 Migration `0007_fleet_operations` adds daily availability and fuel-usage storage.
-It adds no routes or DTO changes; fleet reads still return only master data.
+Separate daily-input routes now use this storage; the fleet list still returns
+only master data. Daily writes require conditional headers described below.
 The API also exposes `GET /health`,
 `GET /ready`, and the same checks under `/api/v1`. Health returns `status`,
 `service`, and `version`; readiness returns 200 when PostgreSQL is reachable
@@ -290,9 +291,10 @@ filters or pagination. This lets the frontend build a depot selector even with
 zero matching vehicles. Vehicle numeric values are three-decimal strings.
 `weekly_fuel_quota_l` is the configured quota, **not remaining fuel**. Vehicle
 availability, fuel usage, trip counts and feasibility are not computed yet.
-Daily availability and fuel inputs now have storage, but no public input service
-or connection to this response. Missing daily records mean unknown, not available
-or zero fuel used. See the [storage rules](DATA-MODEL.md#daily-vehicle-availability-and-fuel-usage).
+Daily availability and fuel inputs have separate GET/PUT endpoints below; they
+are not connected to this list response. Missing daily records mean unknown,
+not available or zero fuel used. See the
+[storage rules](DATA-MODEL.md#daily-vehicle-availability-and-fuel-usage).
 
 Both routes return 200 with empty `items` and `total: 0` when no rows match or
 no depots are assigned; fleet also returns `depots: []` when none are assigned.
@@ -312,6 +314,113 @@ The new shared types are `DepotResponse`, `OutletResponse`, `VehicleResponse`,
 `FleetListResponse`, `DispatcherOrderResponse` and `DispatcherOrderListResponse`.
 The read APIs need no additional migration. Optimization, publishing, live
 operations and frontend screen integration remain future increments.
+
+### Daily fleet inputs
+
+```text
+GET /api/v1/fleet/{vehicle_id}/availability/{availability_date}
+PUT /api/v1/fleet/{vehicle_id}/availability/{availability_date}
+GET /api/v1/fleet/{vehicle_id}/fuel-usage/{usage_date}
+PUT /api/v1/fleet/{vehicle_id}/fuel-usage/{usage_date}
+```
+
+All require active `DISPATCHER` authentication and current vehicle depot access.
+Missing and foreign vehicle IDs both return `404 {"detail":"Vehicle not found"}`.
+Dates are strict `YYYY-MM-DD`. Availability writes accept past/today/future dates;
+fuel writes accept only today/past in Asia/Colombo because they record actual
+consumption. GET may read any stored date. No partial-day availability is implied.
+
+PUT bodies (all other fields rejected):
+
+```json
+{"is_available":false}
+```
+
+```json
+{"fuel_used_l":"12.345"}
+```
+
+The availability value must be a JSON boolean, not a number/string. Fuel is a
+decimal string with at most three fractional digits, `0 <= value < 1000000000`;
+exponents, signs, whitespace and nonfinite values are rejected. It replaces the
+authoritative total across all trips for that vehicle/day. Recorded zero is known
+zero; a missing row is unknown. Actual totals above quota may be recorded.
+
+GET success (200) returns one of:
+
+```json
+{"id":"<UUID>","vehicle_id":"<UUID>","created_at":"2026-10-03T10:30:00Z","availability_date":"2026-10-03","is_available":false}
+```
+
+```json
+{"id":"<UUID>","vehicle_id":"<UUID>","created_at":"2026-10-03T10:30:00Z","usage_date":"2026-10-03","fuel_used_l":"12.345"}
+```
+
+The response includes `ETag: "<64 lowercase hexadecimal characters>"` and
+`Cache-Control: no-store`. The timestamp is row creation time, not last-edit time.
+An accessible vehicle with no row returns 404 with `Daily availability not
+recorded` or `Daily fuel usage not recorded`, respectively. No ETag/default value
+is fabricated for missing data.
+
+PUT requires exactly one supported conditional header:
+
+| Header | Purpose | Success | Failed precondition |
+|---|---|---|---|
+| `If-None-Match: *` | Create an unrecorded day | 201, DTO and `Location` | 412 if already recorded |
+| `If-Match: "<tag from GET>"` | Replace the current value | 200 and DTO | 412 if missing or changed |
+
+GET again after success to obtain the next tag. PUT normalizes/enriches the
+submitted body and therefore sends no ETag/Last-Modified validator, per
+[RFC 9110 section 9.3.4](https://www.rfc-editor.org/rfc/rfc9110.html#section-9.3.4).
+Tags describe the current representation, not edit history: an identical save
+keeps the tag, and A → B → A can restore the earlier tag. On 412, reload and let
+the user review the conflicting value before saving again. A lost success
+response can likewise be recovered with GET; preconditions are not idempotency keys.
+
+PostgreSQL locks the scoped vehicle before reading/comparing the record and holds
+the lock through commit. This serializes API writes per vehicle at the default
+READ COMMITTED isolation. Concurrent writes that change the same starting value
+produce one success and one 412; two identical no-op replacements may both return
+200. SQLite does not provide this concurrency guarantee. No quota reservation,
+audit trail, weekly balance or plan update is performed.
+
+| Status | Meaning |
+|---|---|
+| 400 | Unsupported/duplicate conditional header, both headers, weak/list tag, or `If-Match: *` |
+| 401 / 403 | Missing/inactive credentials / missing Dispatcher role |
+| 404 | Vehicle inaccessible/missing, or no recorded day |
+| 409 | Other integrity conflict; reload the record |
+| 412 | `Daily input changed; reload it before saving` |
+| 422 | Invalid path/body or fuel date after today in Colombo |
+| 428 | Missing required write precondition |
+| 503 | Authentication or fleet input database operation unavailable |
+
+Other integrity conflicts return `{"detail":"Fleet input conflict; reload the record"}`.
+Database failures return `{"detail":"Fleet inputs unavailable"}` without SQL details;
+failed writes roll back. Domain errors and success responses use `Cache-Control:
+no-store`. Existing sanitized validation errors and authentication behavior apply.
+CORS allows conditional headers and exposes `ETag` and `Location` to configured origins.
+
+Shared types: `AvailabilityWriteRequest`, `FuelUsageWriteRequest`,
+`VehicleAvailabilityResponse`, `VehicleFuelUsageResponse`, and `ApiResponse<T>`.
+The new client method returns `{data, status, etag, location}`; `request<T>()`
+continues returning only data. Both throw `ApiError` on unsuccessful HTTP status.
+
+```typescript
+const path = `/fleet/${vehicleId}/availability/${day}`;
+const current = await api.requestWithMetadata<VehicleAvailabilityResponse>(path);
+if (!current.etag) throw new Error('Missing daily input validator');
+await api.request<VehicleAvailabilityResponse>(path, {
+  method: 'PUT',
+  headers: { 'If-Match': current.etag },
+  body: JSON.stringify({ is_available: false }),
+});
+const refreshed = await api.requestWithMetadata<VehicleAvailabilityResponse>(path);
+```
+
+To create a missing day for a vehicle already obtained from `/fleet`, use PUT
+with `If-None-Match: *` instead. There are no daily delete/bulk endpoints yet.
+This API increment needs no new migration; apply `0007_fleet_operations` first.
 
 ### Plan workspaces
 
