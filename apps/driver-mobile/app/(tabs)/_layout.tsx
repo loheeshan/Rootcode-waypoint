@@ -27,6 +27,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="could-not-deliver-offline" options={{ href: null }} />
       <Tabs.Screen name="record-delivery" options={{ href: null }} />
       <Tabs.Screen name="next-stop" options={{ href: null }} />
+      <Tabs.Screen name="trip-ready" options={{ href: null }} />
       <Tabs.Screen name="next-stop-after-save" options={{ href: null }} />
       <Tabs.Screen name="next-stop-last" options={{ href: null }} />
       <Tabs.Screen name="next-stop-closed" options={{ href: null }} />
