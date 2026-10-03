@@ -19,10 +19,11 @@ const TABS: Record<string, { label: string; icon: IconName }> = {
 };
 
 const STOPS_CHILDREN = [
+  "trip-ready",
   "next-stop",
-  "next-stop-closed",
   "next-stop-after-save",
   "next-stop-last",
+  "next-stop-closed",
   "trip-revision",
   "record-delivery",
   "could-not-deliver",
