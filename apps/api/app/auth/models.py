@@ -1,4 +1,4 @@
-"""Identity storage only; login, password hashing and role guards follow separately."""
+"""Identity storage; auth.security provides hashing and token helpers."""
 
 from __future__ import annotations
 
