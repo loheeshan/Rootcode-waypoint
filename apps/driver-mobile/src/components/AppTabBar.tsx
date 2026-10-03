@@ -33,6 +33,7 @@ const STOPS_CHILDREN = [
   "could-not-deliver",
   "could-not-deliver-offline",
 ];
+const SYNC_CHILDREN = ["sync-complete"];
 const TODAY_CHILDREN = ["today-reefer-fault"];
 
 export function AppTabBar({ state, navigation }: TabBarProps) {
@@ -48,7 +49,8 @@ export function AppTabBar({ state, navigation }: TabBarProps) {
         const activeName = state.routes[state.index].name;
         const focused =
           activeName === route.name ||
-          (route.name === "stops" && STOPS_CHILDREN.includes(activeName)) ||
+          (route.name === "stops" && STOPS_CHILDREN.includes(activeName));
+          (route.name === "sync" && SYNC_CHILDREN.includes(activeName));
           (route.name === "today" && TODAY_CHILDREN.includes(activeName));
         const onPress = () => {
           const event = navigation.emit({
