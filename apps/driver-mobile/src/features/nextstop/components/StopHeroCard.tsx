@@ -31,13 +31,14 @@ export function StopHeroCard({
   variant = "range",
 }: Props) {
   const remaining = Math.max(stopTotal - stopNo, 0);
+  const isLast = stopNo >= stopTotal;
 
   const labels =
     variant === "recorded"
       ? {
           left: `${completedStops} recorded`,
           mid: `Stop ${stopNo}`,
-          right: `${remaining} remaining`,
+          right: isLast ? "Final stop" : `${remaining} remaining`,
         }
       : {
           left:
@@ -45,7 +46,7 @@ export function StopHeroCard({
               ? `Stop 01–${pad(completedStops)} Complete`
               : "No stops complete",
           mid: `Stop ${pad(stopNo)} Active`,
-          right: `${remaining} Stops Remaining`,
+          right: isLast ? "Final stop" : `${remaining} Stops Remaining`,
         };
 
   return (
@@ -54,7 +55,7 @@ export function StopHeroCard({
         <View style={styles.nextPill}>
           <View style={styles.pillDot} />
           <Text style={styles.pillText}>
-            NEXT · Stop {stopNo} of {stopTotal}
+            {isLast ? "LAST" : "NEXT"} · Stop {stopNo} of {stopTotal}
           </Text>
         </View>
         <Text style={styles.code}>{outletCode}</Text>
