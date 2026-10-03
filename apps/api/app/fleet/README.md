@@ -24,3 +24,50 @@ The [API contract](../../../../docs/architecture/API-CONTRACTS.md) lists the
 planned `GET /api/v1/fleet` route. No fleet endpoints are mounted yet. Request
 schemas, services, authorization, vehicle availability, fuel usage tracking,
 and planning constraint enforcement will be added in later increments.
+
+## Synthetic demo data
+
+`seed.py` adds one depot, two outlets and two vehicles for local integration.
+These are invented examples, not competition/customer data. It grants the demo
+Store Manager the demo store, and grants the Dispatcher, Loader and Driver the
+demo depot. The Store Manager receives no mall grant; a Driver depot assignment
+does not grant access to any trip.
+
+First create the four demo accounts using the
+[account seed](../auth/README.md#create-demo-accounts). From `D:\Rootcode`:
+
+```powershell
+docker compose up -d --build --wait api
+docker compose exec api alembic upgrade head
+docker compose exec api python -m app.fleet.seed --demo
+```
+
+For local Python, run from `D:\Rootcode\apps\api`:
+
+```powershell
+uv sync --frozen
+uv run alembic upgrade head
+uv run python -m app.fleet.seed --demo
+```
+
+The command requires `APP_ENV=development` or `test`, plus explicit `--demo`.
+All four demo accounts must already exist, be active, and retain their expected
+role. It never creates accounts, resets passwords, reactivates users or changes
+roles. The default account seed still creates only accounts.
+
+Resources use fixed UUIDs derived from versioned demo identifiers. Re-running
+preserves matching rows and existing assignments; it restores any missing demo
+assignments, so run it only when those demo grants are intended. Other records
+and grants are left unchanged. Names are not used to match existing data.
+If an existing fixed-ID record differs from the fixture, the whole operation
+fails without overwriting it. Inspect the reported ID and decide which values
+should be retained before changing conflicting data.
+
+All five resources and four assignments are written in one transaction. Missing
+accounts, changed account roles, record conflicts, and insert failures leave no
+partial setup. The output reports counts and the store/depot UUIDs. With the
+signing key configured, login and `/me` report these assignments immediately.
+No new migration is added; the existing `0004_user_scopes` revision is required.
+
+See [the demo fixture table](../../../../data/seed/README.md) for values. Orders,
+trip assignments and operational records are not seeded by this command.

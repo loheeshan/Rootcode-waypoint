@@ -119,6 +119,7 @@ def test_login_and_me_return_safe_user_and_token_fields(client: TestClient, user
     assert payload["user"] == {
         "id": str(users["DRIVER"]), "email": "driver@example.com",
         "is_active": True, "roles": ["DRIVER"],
+        "outlet_ids": [], "depot_ids": [],
     }
     me = client.get("/api/v1/me", headers={"Authorization": f"Bearer {payload['access_token']}"})
     assert me.status_code == 200

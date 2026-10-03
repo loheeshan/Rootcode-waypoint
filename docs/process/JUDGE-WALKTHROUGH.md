@@ -5,6 +5,10 @@
 Create these accounts with the [demo seed command](../../apps/api/app/auth/README.md#create-demo-accounts)
 and use the password entered at its secure prompt. No default password is supplied.
 Re-running the command preserves existing accounts and their original passwords.
+Then run the [demo resource seed](../../apps/api/app/fleet/README.md#synthetic-demo-data)
+to create the synthetic depot, outlets, vehicles and demo account assignments.
+It does not create orders or trips. The Store Manager is assigned only to the
+demo store; the Dispatcher, Loader and Driver receive the demo depot assignment.
 
 ```text
 dispatcher@waypoint.demo

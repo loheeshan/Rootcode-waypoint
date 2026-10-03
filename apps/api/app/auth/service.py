@@ -20,7 +20,8 @@ def authenticate_user(session: Session, email: str, password: str) -> User | Non
     dummy_hash = _dummy_password_hash()
     user = session.scalars(
         select(User).where(User.email == email).options(
-            selectinload(User.role_assignments).selectinload(UserRole.role)
+            selectinload(User.role_assignments).selectinload(UserRole.role),
+            selectinload(User.outlet_assignments), selectinload(User.depot_assignments),
         )
     ).one_or_none()
     valid = verify_password(password, user.password_hash if user is not None else dummy_hash)
@@ -32,6 +33,7 @@ def authenticate_user(session: Session, email: str, password: str) -> User | Non
 def find_user(session: Session, user_id: UUID) -> User | None:
     return session.scalars(
         select(User).where(User.id == user_id).options(
-            selectinload(User.role_assignments).selectinload(UserRole.role)
+            selectinload(User.role_assignments).selectinload(UserRole.role),
+            selectinload(User.outlet_assignments), selectinload(User.depot_assignments),
         )
     ).one_or_none()

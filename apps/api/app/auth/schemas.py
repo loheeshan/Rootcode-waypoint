@@ -35,12 +35,16 @@ class UserResponse(BaseModel):
     email: str
     is_active: bool
     roles: list[RoleCode]
+    outlet_ids: list[UUID]
+    depot_ids: list[UUID]
 
     @classmethod
     def from_user(cls, user: User) -> "UserResponse":
         return cls(
             id=user.id, email=user.email, is_active=user.is_active,
             roles=sorted(RoleCode(assignment.role.code) for assignment in user.role_assignments),
+            outlet_ids=sorted(assignment.outlet_id for assignment in user.outlet_assignments),
+            depot_ids=sorted(assignment.depot_id for assignment in user.depot_assignments),
         )
 
 

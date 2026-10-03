@@ -11,16 +11,20 @@ Monorepo boilerplate for the delivery operations application described in the su
 - pnpm and uv lockfiles, checks, GitHub Actions, Docker Compose, environment templates, and the original architecture/process documents.
 
 The backend includes identity, fleet and order models with migrations
-`0001_user_roles`, `0002_fleet_foundation` and `0003_orders`. They create users,
-roles, user-role assignments, depots, outlets, vehicles and orders, and seed the
+`0001_user_roles`, `0002_fleet_foundation`, `0003_orders` and `0004_user_scopes`.
+They create users, roles, user-role assignments, depots, outlets, vehicles,
+orders, user-outlet assignments and user-depot assignments, and seed the
 four role definitions. JSON login (`POST /api/v1/auth/login`), current user
 (`GET /api/v1/me`), Argon2id passwords, signed access tokens and reusable role
-guards are implemented. See the [auth setup guide](apps/api/app/auth/README.md)
+guards and outlet/depot scope helpers are implemented. Login and `/me` return
+current role and resource assignments. See the [auth setup guide](apps/api/app/auth/README.md)
 to configure the signing key and the [API contract](docs/architecture/API-CONTRACTS.md#auth)
 for request/response fields. An explicit demo seed command creates the four role
-accounts with a password you choose; sign-in screens are not connected yet.
-Outlet/depot ownership checks, remaining domain tables,
-business endpoints, optimization, fleet/order dataset imports, POD capture, offline
+accounts with a password you choose. A separate resource seed adds a synthetic
+depot, two outlets, two vehicles and demo account assignments; sign-in screens
+are not connected yet.
+Scope enforcement in business endpoints, remaining domain tables,
+business endpoints, optimization, competition dataset imports, POD capture, offline
 outbox processing and end-to-end workflows are **not implemented**. Public starter
 pages contain no real data. `scripts/seed.py --demo` delegates to the account seed;
 `scripts/validate-plan.py` remains a placeholder.
@@ -116,7 +120,10 @@ docker compose exec api alembic check
 
 This starts PostgreSQL, FastAPI and the web app. Mobile apps run separately. The Compose configuration is for local development; the web's API URL is compiled at build time. `docker compose down` preserves the named database volume. Migrations are explicit commands; the API does not create or alter tables at startup.
 
-Current migration: `0003_orders (head)`. For API-only startup and the
+Current migration: `0004_user_scopes (head)`. Apply migrations before using the
+updated login endpoints. Users start with no outlet/depot assignments until
+explicitly configured, including through the demo resource seed below.
+For API-only startup and the
 Windows host-port workaround, see [Backend step 2](docs/process/BACKEND-STEP-02.md).
 
 ## Demo login accounts
@@ -133,7 +140,19 @@ Enter and confirm your own password when prompted. This creates
 existing accounts and permissions. The command permits only `APP_ENV=development`
 or `test`. Configure `JWT_SECRET_KEY` before testing login in the API docs.
 See [the demo setup guide](apps/api/app/auth/README.md#create-demo-accounts) for
-local Python commands and verification. Fleet/order data is not seeded yet.
+local Python commands and verification.
+
+To create the synthetic demo fleet and account assignments, run afterward:
+
+```powershell
+docker compose exec api python -m app.fleet.seed --demo
+```
+
+This adds one depot, two outlets, two vehicles and four account assignments.
+It requires the four active demo accounts with their expected roles. Re-running
+preserves matching data and restores missing demo assignments; conflicting rows
+abort without overwriting them. Orders and trips are not seeded. See the
+[resource setup guide](apps/api/app/fleet/README.md#synthetic-demo-data) for details.
 
 ## Checks
 
