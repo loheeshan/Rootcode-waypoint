@@ -17,10 +17,15 @@ loader@waypoint.demo
 driver@waypoint.demo
 ```
 
-Login, `/me`, and Store order create/list/detail are implemented and can be
-exercised through the API docs. Store creation applies the 16:00 Colombo cutoff;
-the response explains a date adjustment and the stored date is the accepted date.
-Frontend login integration and the operational walkthrough below remain planned.
+Login, `/me`, Store order create/list/detail, Dispatcher order listing and fleet
+reads are implemented and can be exercised through the API docs. Store creation
+applies the 16:00 Colombo cutoff; the response explains a date adjustment and the
+stored date is the accepted date. After creating an order, authorize as the demo
+Dispatcher and query `/api/v1/dispatcher/orders?status=CONFIRMED` with that accepted
+date. The same ID/quantities appear with outlet/depot details. `/api/v1/fleet`
+returns two demo vehicles and one depot. Both reads are restricted to assigned
+depots; availability and remaining fuel are not yet computed. Frontend integration
+and the planning, publishing, loading, delivery and receipt steps remain planned.
 
 ## 1. Store Manager
 1. Login.

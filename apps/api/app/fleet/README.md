@@ -20,10 +20,35 @@ fields, allowed values, and the assumptions behind these choices. The
 verification, and the commit sequence. Migration and constraint tests are in
 `apps/api/tests/test_fleet_schema.py`.
 
-The [API contract](../../../../docs/architecture/API-CONTRACTS.md) lists the
-planned `GET /api/v1/fleet` route. No fleet endpoints are mounted yet. Request
-schemas, services, authorization, vehicle availability, fuel usage tracking,
-and planning constraint enforcement will be added in later increments.
+## Fleet read API
+
+`GET /api/v1/fleet` requires an active `DISPATCHER` bearer token and only returns
+vehicles in the user's currently assigned depots. Optional filters: `depot_id`,
+`type` (`van`/`truck`) and `temperature_type` (`ambient`/`reefer`). Pagination uses
+`limit` (default 20, range 1–100) and `offset` (default 0, nonnegative).
+
+The response contains `items` (vehicles), `total`, `limit`, `offset`, and `depots`
+(assigned depot IDs/names for a selector). Vehicle results sort by UUID; depot
+choices sort by name then UUID and include empty depots. An explicit depot
+narrows both lists. Vehicle filters/pages do not narrow depot choices. Totals
+and returned data are scoped in SQL; a foreign/unknown explicit depot is 403.
+No assignments produce empty lists. Role or assignment revocations take effect
+on the next request. Depot grants never bypass the Dispatcher role requirement.
+
+All numeric vehicle fields use fixed three-decimal strings. Successful responses
+use `Cache-Control: no-store`; database failures return a generic 503. The route
+reads master data only: a weekly quota is not remaining fuel, and listed vehicles
+are not necessarily available or compatible with a plan. Vehicle availability,
+fuel usage tracking, write endpoints and planning enforcement remain pending.
+No new migration is added; apply existing head `0004_user_scopes`.
+
+See the [exact contract](../../../../docs/architecture/API-CONTRACTS.md#fleet-list).
+`tests/test_dispatcher_api.py` checks authorization, depot isolation, filters,
+pagination, metadata, decimal formatting and database failure responses.
+
+After seeding, log in as `dispatcher@waypoint.demo` in `/docs`, authorize with its
+token and call `/api/v1/fleet`. The demo grants show one depot and two vehicles.
+Store/Driver/Loader tokens receive 403 even if they have depot assignments.
 
 ## Synthetic demo data
 
