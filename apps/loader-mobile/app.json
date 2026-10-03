@@ -13,7 +13,8 @@
     "plugins": [
       "expo-router",
       "expo-sqlite",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-status-bar"
     ],
     "ios": {
       "supportsTablet": true,

@@ -10,7 +10,17 @@ from decimal import Decimal
 from enum import StrEnum
 from uuid import UUID, uuid4
 
-from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, Numeric, String, Uuid, func
+from sqlalchemy import (
+    CheckConstraint,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    Numeric,
+    String,
+    Uuid,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -37,6 +47,7 @@ class Order(Base):
 
     __tablename__ = "orders"
     __table_args__ = (
+        Index("uq_orders_id_outlet", "id", "outlet_id", unique=True),
         CheckConstraint(
             "temperature_requirement IN ('ambient', 'chilled')",
             name="temperature_requirement_allowed",

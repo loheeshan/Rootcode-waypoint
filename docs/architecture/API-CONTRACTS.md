@@ -7,6 +7,8 @@ fleet read routes are implemented. Store receipt, planning, live operations,
 Loader and Driver business routes remain planned.
 Migration `0005_planning_foundation` adds storage for plans, revisions, trips and
 stops; it does not mount planning routes or implement allocation/publishing.
+Migration `0006_plan_outcomes` adds order result and deferral reason storage,
+without new routes or changes to existing order JSON/status behavior.
 The API also exposes `GET /health`,
 `GET /ready`, and the same checks under `/api/v1`. Health returns `status`,
 `service`, and `version`; readiness returns 200 when PostgreSQL is reachable
@@ -363,6 +365,15 @@ FAILED
 `PlanStatus` and `StopStatus` join `TripStatus` in shared types and are re-exported
 by `@waypoint/api-contracts`. These enums specify stored values, not permission
 to perform a transition. Planning response DTOs will be defined with the routes.
+
+Planning outcome storage exports `AssignmentOutcome` (`SERVED` or `DEFERRED`)
+and `DeferralReason` from shared types and re-exports them via the API contract
+package. `SERVED` means assigned to a stop in a revision, not delivered. Reason
+codes are `NO_COMPATIBLE_VEHICLE`, `REEFER_CAPACITY_EXHAUSTED`,
+`VAN_CAPACITY_EXHAUSTED`, `WEIGHT_CAPACITY`, `VOLUME_CAPACITY`, `TIME_WINDOW`,
+`FUEL_QUOTA`, `VEHICLE_UNAVAILABLE`, `TRIP_LIMIT`. These are storage contracts;
+optimization, complete outcome coverage, reason generation and publishing
+validation remain pending.
 
 Sync:
 ```text
