@@ -32,9 +32,15 @@ saved revision counts, not optimization success. Frontend integration, allocatio
 publishing, loading, delivery and receipt steps remain planned.
 
 Apply migration `0007_fleet_operations` before testing the current backend. It
-adds empty daily vehicle availability/fuel tables without changing the API
-walkthrough. Demo resources have no daily operational inputs yet; missing rows
-mean unknown. Input endpoints and planner enforcement remain future increments.
+adds empty daily vehicle availability/fuel tables. Demo seeds do not create
+daily inputs; missing rows mean unknown. As Dispatcher, choose a vehicle ID from
+`/fleet`. PUT its `/fleet/{id}/availability/{today}` with `If-None-Match: *` and
+`{"is_available":true}`; GET it to read the ETag. Replace the value using that tag
+in `If-Match`; repeating a change with the old tag returns 412. GET again for
+the new tag. The matching `/fuel-usage/{today}` endpoint accepts an actual daily
+total such as `{"fuel_used_l":"0"}` with the same conditional flow. Future fuel
+dates are rejected. Planner enforcement, weekly balances and audit history remain
+future increments; these inputs do not allocate orders or change plans.
 
 ## 1. Store Manager
 1. Login.

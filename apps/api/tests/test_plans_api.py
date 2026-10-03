@@ -100,7 +100,7 @@ def test_create_list_detail_and_initial_revision_persist_together(
     }
     assert response.headers["location"] == f"{BASE}/{body['id']}"
     assert response.headers["cache-control"] == "no-store"
-    assert response.headers["access-control-expose-headers"] == "Location"
+    assert "Location" in response.headers["access-control-expose-headers"].split(", ")
     detail = client.get(response.headers["location"], headers=headers)
     assert detail.status_code == 200 and detail.json() == body
     assert detail.headers["cache-control"] == "no-store"
@@ -313,7 +313,7 @@ def test_duplicate_create_returns_existing_location_without_new_revision(
     assert duplicate.status_code == 409
     assert duplicate.json() == {"detail": "A plan already exists for this depot and delivery date"}
     assert duplicate.headers["location"] == created.headers["location"]
-    assert duplicate.headers["access-control-expose-headers"] == "Location"
+    assert "Location" in duplicate.headers["access-control-expose-headers"].split(", ")
     assert client.get(duplicate.headers["location"], headers=headers).json() == before
     with Session(engine) as db:
         assert db.scalar(select(func.count()).select_from(Plan)) == 1

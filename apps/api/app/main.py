@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 
 from app.auth.router import router as auth_router
 from app.core.config import get_settings
+from app.fleet.operations_router import router as fleet_inputs_router
 from app.fleet.router import router as fleet_router
 from app.health import router as health_router
 from app.orders.dispatcher_router import router as dispatcher_orders_router
@@ -20,8 +21,10 @@ def create_app() -> FastAPI:
         allow_origins=settings.cors_origins,
         allow_credentials=False,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type", "Idempotency-Key"],
-        expose_headers=["Location"],
+        allow_headers=[
+            "Authorization", "Content-Type", "Idempotency-Key", "If-Match", "If-None-Match",
+        ],
+        expose_headers=["Location", "ETag"],
     )
     application.include_router(health_router)
     application.include_router(health_router, prefix="/api/v1")
@@ -29,6 +32,7 @@ def create_app() -> FastAPI:
     application.include_router(store_orders_router, prefix="/api/v1")
     application.include_router(dispatcher_orders_router, prefix="/api/v1")
     application.include_router(fleet_router, prefix="/api/v1")
+    application.include_router(fleet_inputs_router, prefix="/api/v1")
     application.include_router(plans_router, prefix="/api/v1")
 
     @application.exception_handler(RequestValidationError)
