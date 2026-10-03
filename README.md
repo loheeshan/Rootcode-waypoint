@@ -17,13 +17,13 @@ four role definitions. JSON login (`POST /api/v1/auth/login`), current user
 (`GET /api/v1/me`), Argon2id passwords, signed access tokens and reusable role
 guards are implemented. See the [auth setup guide](apps/api/app/auth/README.md)
 to configure the signing key and the [API contract](docs/architecture/API-CONTRACTS.md#auth)
-for request/response fields. Accounts are not seeded and sign-in screens are not
-connected yet.
+for request/response fields. An explicit demo seed command creates the four role
+accounts with a password you choose; sign-in screens are not connected yet.
 Outlet/depot ownership checks, remaining domain tables,
-business endpoints, optimization, account/dataset seed imports, POD capture, offline
+business endpoints, optimization, fleet/order dataset imports, POD capture, offline
 outbox processing and end-to-end workflows are **not implemented**. Public starter
-pages contain no real data. `scripts/seed.py` and `scripts/validate-plan.py`
-intentionally exit with a clear message until implemented.
+pages contain no real data. `scripts/seed.py --demo` delegates to the account seed;
+`scripts/validate-plan.py` remains a placeholder.
 
 ## Structure
 
@@ -119,6 +119,22 @@ This starts PostgreSQL, FastAPI and the web app. Mobile apps run separately. The
 Current migration: `0003_orders (head)`. For API-only startup and the
 Windows host-port workaround, see [Backend step 2](docs/process/BACKEND-STEP-02.md).
 
+## Demo login accounts
+
+After rebuilding the API and applying migrations, run:
+
+```powershell
+docker compose exec api python -m app.auth.seed --demo
+```
+
+Enter and confirm your own password when prompted. This creates
+`dispatcher@waypoint.demo`, `store@waypoint.demo`, `loader@waypoint.demo` and
+`driver@waypoint.demo`; no password is stored in the repository. Re-runs preserve
+existing accounts and permissions. The command permits only `APP_ENV=development`
+or `test`. Configure `JWT_SECRET_KEY` before testing login in the API docs.
+See [the demo setup guide](apps/api/app/auth/README.md#create-demo-accounts) for
+local Python commands and verification. Fleet/order data is not seeded yet.
+
 ## Checks
 
 ```powershell
@@ -130,7 +146,7 @@ uv run mypy app
 uv run pytest
 ```
 
-`pnpm build` builds the web app. `pnpm export:mobile` bundles Android and iOS JavaScript for both apps; it does not produce APK/IPA binaries. Root tests cover the shared client, and API tests cover health, readiness, CORS, identity, fleet and order constraints, migration rollback/reapply, model/migration alignment, password/token validation, JSON login, current-user access and the four-role permission matrix. Add feature tests as each workflow is implemented.
+`pnpm build` builds the web app. `pnpm export:mobile` bundles Android and iOS JavaScript for both apps; it does not produce APK/IPA binaries. Root tests cover the shared client, and API tests cover health, readiness, CORS, identity, fleet and order constraints, migration rollback/reapply, model/migration alignment, password/token validation, JSON login, current-user access, the four-role permission matrix, seed rollback and repeatable demo login. Add feature tests as each workflow is implemented.
 
 ## Next implementation branches
 

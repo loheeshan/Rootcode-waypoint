@@ -2,12 +2,19 @@
 
 ## Seed users
 
+Create these accounts with the [demo seed command](../../apps/api/app/auth/README.md#create-demo-accounts)
+and use the password entered at its secure prompt. No default password is supplied.
+Re-running the command preserves existing accounts and their original passwords.
+
 ```text
 dispatcher@waypoint.demo
 store@waypoint.demo
 loader@waypoint.demo
 driver@waypoint.demo
 ```
+
+Login and `/me` are implemented and can be exercised through the API docs.
+Frontend login integration and the operational walkthrough below remain planned.
 
 ## 1. Store Manager
 1. Login.
