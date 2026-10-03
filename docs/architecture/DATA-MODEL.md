@@ -8,6 +8,9 @@ Migration `0003_orders` adds `orders`.
 Migration `0004_user_scopes` adds `user_outlets` and `user_depots`.
 Migration `0005_planning_foundation` adds `plans`, `plan_revisions`, `trips`, and
 `trip_stops`. It preserves all earlier tables and inserts no planning records.
+Migration `0006_plan_outcomes` adds `plan_assignments`, `deferral_decisions`, and
+supporting unique indexes on orders, trips and stops. All 13 earlier tables and
+records are preserved; no outcomes are inserted.
 The other tables in the core table list remain planned.
 
 ### Identity
@@ -158,9 +161,9 @@ Trips use the shared `PLANNED`, `LOADING`, `READY`, `IN_PROGRESS`, `COMPLETED`
 statuses. The optional driver reference enables later assignment; it does not
 validate a user's role/activity or grant trip access. Stop statuses are `PLANNED`,
 `ARRIVED`, `DELIVERED`, `FAILED`, also exported by shared types. Transition checks,
-failure evidence, order-to-stop assignments and deferral decisions are not yet
-implemented. A stop is one outlet visit, not one order. Several orders may later
-map to a stop; another trip may visit the same outlet.
+failure evidence and publishing remain unimplemented. A stop is one outlet visit,
+not one order. Several orders may map to a stop through the assignments below;
+another trip may visit the same outlet.
 
 `planned_arrival_time` includes both date and timezone (PostgreSQL `TIMESTAMPTZ`),
 so a stop can fall after midnight. It can remain null until scheduling computes
@@ -176,8 +179,52 @@ services must prohibit edits and create new revisions. No planning routes are
 mounted yet, so the tables do not expose a public bypass for these checks.
 
 See the [planning migration guide](../../apps/api/app/planning/README.md).
-Downgrade to `0004_user_scopes` drops these four tables and planning data only;
+Downgrading from `0005` to `0004_user_scopes` drops these four foundation tables;
 rollback/reapply checks use disposable databases.
+
+### Order outcomes and deferral reasons
+
+| Table | Stored fields and constraints |
+|---|---|
+| `plan_assignments` | UUID `id`; required `plan_revision_id`, `order_id`, `outlet_id`, `outcome`; nullable `trip_id` and `trip_stop_id`; required timezone-aware `created_at` with database-time default. Unique `(plan_revision_id, order_id)`. |
+| `deferral_decisions` | UUID `id`; required `plan_revision_id`, `order_id`, `assignment_outcome` (defaults to and must equal `DEFERRED`), `reason_code`, `reason_text`; required timezone-aware `created_at` with database-time default. Unique `(plan_revision_id, order_id)`. |
+
+An assignment is the canonical outcome for one order in a revision: `SERVED`
+requires both route IDs, and `DEFERRED` requires both to be null. `SERVED` means
+assigned for delivery, not physically delivered. Both outcomes for the same
+order/revision cannot coexist. Alternatives can exist in different revisions.
+Neither table changes the order's live status automatically.
+
+Composite foreign keys require `(order_id, outlet_id)` to match the order,
+`(trip_id, plan_revision_id)` to match the trip, and
+`(trip_stop_id, trip_id, outlet_id)` to match the stop. A separate revision foreign
+key also covers deferred assignments. The migration adds unique indexes
+`uq_orders_id_outlet`, `uq_trips_id_revision`, and `uq_trip_stops_id_trip_outlet`
+as reference targets; they do not rewrite existing rows. Changing referenced
+parent IDs/outlet/revision values to inconsistent combinations is blocked.
+
+The deferral's revision/order/constant outcome reference one deferred assignment,
+so a reason cannot belong to a served or missing result. A unique supporting
+assignment key includes the outcome for that reference. Every new foreign key
+uses `RESTRICT`; its leading column has an index or unique key. Reasons must be
+removed before their assignment can be removed or switched to served.
+
+Allowed reason codes are `NO_COMPATIBLE_VEHICLE`, `REEFER_CAPACITY_EXHAUSTED`,
+`VAN_CAPACITY_EXHAUSTED`, `WEIGHT_CAPACITY`, `VOLUME_CAPACITY`, `TIME_WINDOW`,
+`FUEL_QUOTA`, `VEHICLE_UNAVAILABLE`, `TRIP_LIMIT`. These match the supplied
+architecture. The single primary `reason_text` is required, at most 1,000
+characters, and not solely spaces/tabs/line breaks.
+
+A draft deferred result may exist without a reason until its explanation is
+written. Future atomic result writing/publishing must require every deferred
+result's reason and cover every selected order exactly once. These constraints
+provide at-most-one outcome, not complete coverage, depot/date eligibility,
+physical feasibility, current-publication selection or immutable published data.
+No planning mutation API is mounted yet. Shared types export `AssignmentOutcome`
+and `DeferralReason`; public planning response DTOs remain future work.
+
+Downgrading to `0005_planning_foundation` drops only the two outcome tables and
+three supporting parent indexes; all 13 earlier tables and records remain.
 
 All implemented model modules are registered in `apps/api/app/db/models.py` for Alembic.
 Table creation is performed by explicit migrations, never at API startup.
@@ -309,11 +356,24 @@ planned_arrival_time
 status
 ```
 
+### plan_assignments
+```text
+id
+plan_revision_id
+order_id
+outlet_id
+outcome
+trip_id (nullable)
+trip_stop_id (nullable)
+created_at
+```
+
 ### deferral_decisions
 ```text
 id
 order_id
 plan_revision_id
+assignment_outcome (always DEFERRED)
 reason_code
 reason_text
 created_at
@@ -346,8 +406,8 @@ received_at
 
 These are requirements for later workflow and planning increments. The current
 planning migration enforces references, allowed values, revision/sequence
-uniqueness and two trip slots per vehicle/revision; it does not enforce these
-complete operational rules.
+uniqueness, two trip slots per vehicle/revision, and one consistent outcome per
+order/revision; it does not enforce these complete operational rules.
 
 - `sync_events.event_id` unique
 - max 2 trips per vehicle/day

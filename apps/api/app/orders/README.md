@@ -19,7 +19,7 @@ docker compose exec api alembic current
 docker compose exec api alembic check
 ```
 
-The order table was introduced at `0003_orders`; current head is `0005_planning_foundation`.
+The order table was introduced at `0003_orders`; current head is `0006_plan_outcomes`.
 This API increment adds no migration. The order migration preserves existing users,
 roles, depots, outlets and vehicles, and inserts no sample orders. Downgrading
 to `0002_fleet_foundation` deletes the order table and its data; use disposable
@@ -76,6 +76,8 @@ See the [exact JSON contract](../../../../docs/architecture/API-CONTRACTS.md#sto
 `tests/test_store_orders_api.py` covers role/outlet isolation, cutoff boundaries,
 validation, filtering, stable tie ordering, and failed-write rollback. Frontend
 wiring, receipts and status transitions remain pending.
+Planning outcomes now reference orders and matching trip stops (or a deferral
+reason); they do not update `orders.status`. See the [planning storage guide](../planning/README.md).
 
 ## Dispatcher order queue
 
