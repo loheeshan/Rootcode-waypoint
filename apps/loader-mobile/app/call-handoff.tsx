@@ -1,9 +1,22 @@
-import { Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { PhoneHandoffModal } from '../src/components/modals/PhoneHandoffModal';
+import { popupColors } from '../src/theme/popupTokens';
 
-export default function CallHandoff() {
+export default function CallHandoffScreen() {
+  const router = useRouter();
+  const [visible, setVisible] = useState(true);
+
+  const handleReturn = () => {
+    setVisible(false);
+    if (router.canGoBack()) router.back();
+    else router.replace('/');
+  };
+
   return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-      <Text>Call handoff (coming soon)</Text>
+    <View style={{ flex: 1, backgroundColor: popupColors.overlay }}>
+      <PhoneHandoffModal visible={visible} onReturn={handleReturn} />
     </View>
   );
 }
