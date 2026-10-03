@@ -18,7 +18,12 @@ const TABS: Record<string, { label: string; icon: IconName }> = {
   profile: { label: "Profile", icon: "account-outline" },
 };
 
-const STOPS_CHILDREN = ["record-delivery", "could-not-deliver"];
+const STOPS_CHILDREN = [
+  "next-stop",
+  "record-delivery",
+  "could-not-deliver",
+  "could-not-deliver-offline",
+];
 
 export function AppTabBar({ state, navigation }: TabBarProps) {
   const insets = useSafeAreaInsets();
