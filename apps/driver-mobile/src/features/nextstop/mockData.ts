@@ -24,3 +24,16 @@ export const mockNextStop: NextStopSnapshot = {
   gpsLabel: "Strong",
   kmLeft: 6.2,
 };
+// TODO(feature/driver-sqlite): the next stop is read from SQLite after a record is saved
+export const mockNextStopAfterSave: NextStopSnapshot = {
+  ...mockNextStop,
+  stopNo: 5,
+  outletCode: "OUT021",
+  outletName: "OUT021 Cargills Express Borella",
+  address: "Borella · rear receiving entrance",
+  windowStart: "07:15",
+  windowEnd: "08:00",
+  eta: "07:22",
+  completedStops: 4,
+  progressVariant: "recorded",
+};
