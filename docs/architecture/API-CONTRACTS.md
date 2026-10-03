@@ -2,8 +2,9 @@
 
 ## Implementation status
 
-Authentication and Store order create/list/detail routes are implemented.
-Store receipt, Dispatcher, Loader and Driver business routes remain planned.
+Authentication, Store order create/list/detail, Dispatcher order listing and
+fleet read routes are implemented. Store receipt, planning, live operations,
+Loader and Driver business routes remain planned.
 The API also exposes `GET /health`,
 `GET /ready`, and the same checks under `/api/v1`. Health returns `status`,
 `service`, and `version`; readiness returns 200 when PostgreSQL is reachable
@@ -203,6 +204,104 @@ GET  /api/v1/plans/{plan_id}
 POST /api/v1/plans/{plan_id}/publish
 GET  /api/v1/operations/live
 ```
+
+The first two routes are implemented and require bearer authentication plus
+`DISPATCHER`. Both use current `UserDepot` assignments in SQL before counting or
+paginating. Dispatcher access to orders follows each outlet's current depot;
+Store `UserOutlet` assignments do not widen Dispatcher access. Other roles cannot
+use these routes, even with a depot grant. No role bypass or all-depot access is
+implicit. Revoking a grant takes effect on the next request.
+
+### Dispatcher order queue
+
+`GET /api/v1/dispatcher/orders` supports optional `depot_id`, `outlet_id`,
+`status`, and `requested_delivery_date` filters. By default all accessible
+statuses/dates are returned; use `status=CONFIRMED` for the confirmed order queue.
+The date is the accepted delivery date stored after the Store cutoff adjustment.
+Filters combine with AND. An explicit depot or outlet outside assigned depots,
+including an unknown UUID, returns 403. Two individually authorized but
+nonmatching depot/outlet filters return an empty list.
+
+Pagination uses `limit` (default 20, range 1–100) and `offset` (default 0, at least
+0). The response is `{"items":[<dispatcher-order>],"total":1,"limit":20,"offset":0}`.
+Each item contains every field of the Store `OrderResponse`, plus:
+
+```json
+{
+  "outlet": {
+    "id": "<same UUID as outlet_id>",
+    "brand": "Demo Store",
+    "district": "Colombo",
+    "depot_id": "<depot UUID>",
+    "dock_type": "ground",
+    "parking_constraint": "none",
+    "window_open_time": "08:00:00",
+    "window_close_time": "18:00:00",
+    "mall_window": false
+  },
+  "depot": {"id": "<depot UUID>", "name": "Demo Depot"}
+}
+```
+
+Delivery window strings are local `Asia/Colombo` times without a timezone offset;
+they may include fractional seconds. A close time earlier than open is an
+overnight window. `mall_window` flags a mall restriction on that same window.
+Parking is `none` or `van_only`; `dock_type` is a text label. Orders sort by
+creation time descending, then UUID descending. Quantities remain three-decimal
+strings and `created_at` remains UTC. There is no order detail or mutation route
+for Dispatcher in this increment.
+
+### Fleet list
+
+`GET /api/v1/fleet` supports optional `depot_id`, `type` (`van` or `truck`) and
+`temperature_type` (`ambient` or `reefer`) filters, with the same pagination
+limits. `items` contains vehicles, ordered by UUID ascending:
+
+```json
+{
+  "items": [{
+    "id": "<vehicle UUID>",
+    "type": "van",
+    "temperature_type": "reefer",
+    "weight_cap_kg": "1200.000",
+    "volume_cap_m3": "8.000",
+    "km_per_l": "8.000",
+    "weekly_fuel_quota_l": "120.000",
+    "depot_id": "<assigned depot UUID>"
+  }],
+  "total": 1,
+  "limit": 20,
+  "offset": 0,
+  "depots": [{"id": "<assigned depot UUID>", "name": "Demo Depot"}]
+}
+```
+
+`total` counts filtered vehicles before pagination. `depots` lists all currently
+assigned depots, or only the selected authorized depot when `depot_id` is supplied.
+It sorts by name then UUID, includes empty depots, and is unaffected by vehicle
+filters or pagination. This lets the frontend build a depot selector even with
+zero matching vehicles. Vehicle numeric values are three-decimal strings.
+`weekly_fuel_quota_l` is the configured quota, **not remaining fuel**. Vehicle
+availability, fuel usage, trip counts and feasibility are not computed yet.
+
+Both routes return 200 with empty `items` and `total: 0` when no rows match or
+no depots are assigned; fleet also returns `depots: []` when none are assigned.
+Successful responses use `Cache-Control: no-store`. Offset pages may shift when
+data changes between requests.
+
+| Status | Meaning |
+|---|---|
+| 401 | Missing/invalid token or inactive account |
+| 403 | Incorrect role or explicit depot/outlet filter outside assigned depots |
+| 422 | Invalid UUID, enum, date or pagination value |
+| 503 | Authentication or database read unavailable |
+
+Order read failures return `{"detail":"Orders unavailable"}`; fleet failures
+return `{"detail":"Fleet unavailable"}`, without SQL/connection details.
+The new shared types are `DepotResponse`, `OutletResponse`, `VehicleResponse`,
+`FleetListResponse`, `DispatcherOrderResponse` and `DispatcherOrderListResponse`.
+No database migration is needed. Planning/publishing/live operations and
+frontend screen integration remain future increments.
 
 ## Loader
 

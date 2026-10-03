@@ -101,8 +101,9 @@ Outlet delivery rules:
 
 This increment stores fleet data and enforces field and foreign-key constraints.
 Vehicle availability, fuel usage records, route allocation, and planning rules
-are not implemented. `GET /api/v1/fleet` remains a planned endpoint; there are no
-fleet CRUD endpoints or authorization rules yet.
+are not implemented. `GET /api/v1/fleet` now provides Dispatcher-only vehicle
+reads scoped to current depot assignments, including assigned depot choices.
+There are no public fleet write endpoints. The read API adds no schema changes.
 
 ### Orders
 
@@ -124,6 +125,9 @@ The migration starts the order table empty and preserves existing identity and
 fleet records. The Store create/list/detail API now applies role/outlet checks
 and next-day cutoff handling. Original requested date and cutoff flag are only
 returned in the create response; the existing column retains the accepted date.
+Dispatcher listing joins each order to its outlet's current depot and restricts
+results/counts to assigned depots; it includes outlet constraints and depot names.
+That read API does not rely on Store outlet grants or snapshot depot ownership.
 Order status transitions and receipt processing remain separate future work.
 
 All implemented model modules are registered in `apps/api/app/db/models.py` for Alembic.
