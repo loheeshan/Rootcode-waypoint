@@ -30,6 +30,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="trip-ready" options={{ href: null }} />
       <Tabs.Screen name="trip-complete" options={{ href: null }} />
       <Tabs.Screen name="trip-records" options={{ href: null }} />
+      <Tabs.Screen name="kandy-trip" options={{ href: null }} />
       <Tabs.Screen name="sync-complete" options={{ href: null }} />
       <Tabs.Screen name="route-conflict" options={{ href: null }} />
       <Tabs.Screen name="photo-attention" options={{ href: null }} />

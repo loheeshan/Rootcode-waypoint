@@ -8,10 +8,7 @@ export default function RouteConflict() {
   return (
     <RouteConflictScreen
       data={mockRouteConflict}
-      onAcknowledge={() => {
-        // TODO(feature/driver-sync): mark the conflict as acknowledged on the phone
-        router.navigate("/stops");
-      }}
+      onAcknowledge={() => router.push("/kandy-trip")}
       onContactDispatcher={() => {
         // TODO: open the Contact dispatch popup
         console.log("contact dispatcher");
