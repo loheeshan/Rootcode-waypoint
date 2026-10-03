@@ -16,10 +16,7 @@ export default function RouteConflict() {
         // TODO: open the Contact dispatch popup
         console.log("contact dispatcher");
       }}
-      onCheckPendingPhoto={() => {
-        // TODO: open the Uploading photo popup
-        console.log("check pending photo");
-      }}
+      onCheckPendingPhoto={() => router.push("/photo-attention")}
     />
   );
 }
