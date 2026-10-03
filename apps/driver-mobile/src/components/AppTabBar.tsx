@@ -33,7 +33,7 @@ const STOPS_CHILDREN = [
   "could-not-deliver",
   "could-not-deliver-offline",
 ];
-const SYNC_CHILDREN = ["sync-complete"];
+const SYNC_CHILDREN = ["sync-complete", "route-conflict"];
 const TODAY_CHILDREN = ["today-reefer-fault"];
 
 export function AppTabBar({ state, navigation }: TabBarProps) {
