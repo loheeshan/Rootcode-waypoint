@@ -1,146 +1,108 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { colors, radius } from '../theme/colors';
+import { t } from '../theme/loaderTokens';
 
-interface AppHeaderProps {
-  /** Small badge next to the brand, e.g. "LOADER". */
+type Props = {
   role: string;
-  /** Line under the brand, e.g. "Peliyagoda · Route Colombo". */
   location: string;
-  /** Shows the red dot on the bell. */
   hasAlerts?: boolean;
-  onPressVehicle?: () => void;
-  onPressAlerts?: () => void;
-  onPressProfile?: () => void;
-}
+};
 
-/** Shared top bar. Used by every loader tab through the tabs layout `header` option. */
-export function AppHeader({
-  role,
-  location,
-  hasAlerts = false,
-  onPressVehicle,
-  onPressAlerts,
-  onPressProfile,
-}: AppHeaderProps) {
-  const insets = useSafeAreaInsets();
+export function AppHeader({ role, location, hasAlerts }: Props) {
+  const router = useRouter();
+  const go = (path: string) => router.navigate(path as never);
 
   return (
-    <View style={[s.root, { paddingTop: insets.top + 8 }]}>
-      <View style={s.logo}>
-        <Ionicons name="location" size={22} color={colors.onDark} />
-      </View>
-
-      <View style={s.brandBlock}>
-        <View style={s.brandRow}>
-          <Text style={s.brand}>Waypoint</Text>
-          <View style={s.roleBadge}>
-            <Text style={s.roleText}>{role}</Text>
+    <View style={styles.wrap}>
+      {/* Brand + location */}
+      <Pressable style={styles.brand} onPress={() => go('/tabs/today')}>
+        <View style={styles.logo}>
+          <Ionicons name="location" size={22} color="#fff" />
+        </View>
+        <View style={{ flexShrink: 1 }}>
+          <View style={styles.titleRow}>
+            <Text style={styles.title}>Waypoint</Text>
+            <View style={styles.roleBadge}>
+              <Text style={styles.roleText}>{role}</Text>
+            </View>
+          </View>
+          <View style={styles.locRow}>
+            <View style={styles.dot} />
+            <Text style={styles.loc} numberOfLines={1}>
+              {location}
+            </Text>
+            <Ionicons name="chevron-down" size={12} color="#64748B" />
           </View>
         </View>
-        <View style={s.locationRow}>
-          <View style={s.dot} />
-          <Text style={s.location} numberOfLines={1}>
-            {location}
-          </Text>
-        </View>
-      </View>
+      </Pressable>
 
-      <View style={s.actions}>
-        <IconButton icon="bus-outline" label="Vehicle" onPress={onPressVehicle} />
-        <IconButton icon="notifications-outline" label="Alerts" onPress={onPressAlerts} badge={hasAlerts} />
+      {/* Actions */}
+      <View style={styles.actions}>
         <Pressable
-          onPress={onPressProfile}
-          accessibilityRole="button"
-          accessibilityLabel="Profile"
-          style={s.avatar}
+          accessibilityLabel="Vehicle and dock details"
+          style={styles.iconBtn}
+          onPress={() => go('/tabs/vehicle')}
         >
-          <Ionicons name="person-outline" size={20} color={colors.onDark} />
+          <Ionicons name="bus-outline" size={20} color={t.text} />
+        </Pressable>
+
+        <Pressable
+          accessibilityLabel="Notifications"
+          style={styles.iconBtn}
+          onPress={() => go('/tabs/notifications')}
+        >
+          <Ionicons name="notifications-outline" size={20} color={t.text} />
+          {hasAlerts ? <View style={styles.alertDot} /> : null}
+        </Pressable>
+
+        <Pressable
+          accessibilityLabel="Profile"
+          style={[styles.iconBtn, styles.avatar]}
+          onPress={() => go('/tabs/profile')}
+        >
+          <Ionicons name="person-outline" size={20} color="#fff" />
         </Pressable>
       </View>
     </View>
   );
 }
 
-function IconButton({
-  icon,
-  label,
-  onPress,
-  badge,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  onPress?: () => void;
-  badge?: boolean;
-}) {
-  return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} style={s.iconBtn}>
-      <Ionicons name={icon} size={20} color={colors.ink} />
-      {badge ? <View style={s.badge} /> : null}
-    </Pressable>
-  );
-}
-
-const s = StyleSheet.create({
-  root: {
+const styles = StyleSheet.create({
+  wrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    justifyContent: 'space-between',
+    gap: 8,
     paddingHorizontal: 16,
-    paddingBottom: 10,
-    backgroundColor: colors.bg,
+    paddingVertical: 10,
+    backgroundColor: '#F4F7FF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
   },
+  brand: { flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 1 },
   logo: {
-    width: 42,
-    height: 42,
-    borderRadius: radius.md,
-    backgroundColor: colors.blue,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 44, height: 44, borderRadius: 12, backgroundColor: t.blue,
+    alignItems: 'center', justifyContent: 'center',
   },
-  brandBlock: { flex: 1, minWidth: 0 },
-  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  brand: { color: colors.ink, fontSize: 18, fontWeight: '800' },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  title: { fontSize: 18, fontWeight: '800', color: t.text },
   roleBadge: {
-    backgroundColor: '#E3E7F0',
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 6,
+    backgroundColor: '#E2E8F0', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2,
   },
-  roleText: { color: colors.muted, fontSize: 10, fontWeight: '700', letterSpacing: 0.6 },
-  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 1 },
-  dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.green },
-  location: { color: colors.muted, fontSize: 12, flexShrink: 1 },
+  roleText: { fontSize: 10, fontWeight: '800', color: '#475569', letterSpacing: 0.5 },
+  locRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
+  dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#22C55E' },
+  loc: { fontSize: 12, color: '#475569', flexShrink: 1, maxWidth: 130 },
   actions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   iconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 40, height: 40, borderRadius: 12, backgroundColor: '#fff',
+    borderWidth: 1, borderColor: '#E2E8F0', alignItems: 'center', justifyContent: 'center',
   },
-  badge: {
-    position: 'absolute',
-    top: 8,
-    right: 9,
-    width: 9,
-    height: 9,
-    borderRadius: 5,
-    backgroundColor: colors.red,
-    borderWidth: 1.5,
-    borderColor: colors.surface,
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.ink,
-    alignItems: 'center',
-    justifyContent: 'center',
+  avatar: { backgroundColor: t.navy, borderColor: t.navy, borderRadius: 20 },
+  alertDot: {
+    position: 'absolute', top: 7, right: 8, width: 9, height: 9, borderRadius: 5,
+    backgroundColor: '#EF4444', borderWidth: 1.5, borderColor: '#fff',
   },
 });
