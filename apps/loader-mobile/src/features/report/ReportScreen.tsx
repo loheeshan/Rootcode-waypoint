@@ -1,4 +1,3 @@
-// src/features/report/ReportScreen.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -44,9 +43,9 @@ export default function ReportScreen() {
       {/* Order context */}
       <Card dark>
         <View style={styles.spread}>
-          <View style={styles.row}>
+          <View style={[styles.row, { flex: 1 }]}>
             <Ionicons name="bus-outline" size={14} color="#CBD5E1" />
-            <Text style={styles.darkCaps}>VEH018 · TRIP 1 · LOADING ISSUE</Text>
+            <Text style={styles.darkCaps} numberOfLines={1}>VEH018 · TRIP 1 · LOADING ISSUE</Text>
           </View>
           <View style={styles.exception}>
             <View style={styles.dot} />
@@ -80,7 +79,9 @@ export default function ReportScreen() {
               >
                 <View style={[styles.row, { flex: 1 }]}>
                   {'warn' in p && p.warn ? <Ionicons name="warning" size={14} color="#D97706" /> : null}
-                  <Text style={[styles.optionText, selected && { color: '#fff' }]}>{p.label}</Text>
+                  <Text style={[styles.optionText, selected && { color: '#fff' }]} numberOfLines={1}>
+                    {p.label}
+                  </Text>
                 </View>
                 {selected ? (
                   <Ionicons name="checkmark-circle" size={20} color="#fff" />
@@ -178,9 +179,9 @@ const styles = StyleSheet.create({
   spread: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   muted: { fontSize: 12, color: t.muted },
   mutedSmall: { fontSize: 12, color: t.muted, lineHeight: 17 },
-  darkCaps: { fontSize: 11, fontWeight: '700', color: '#CBD5E1', letterSpacing: 0.4 },
+  darkCaps: { fontSize: 11, fontWeight: '700', color: '#CBD5E1', letterSpacing: 0.4, flexShrink: 1 },
   exception: {
-    flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1,
+    flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, flexShrink: 0,
     borderColor: 'rgba(248,113,113,0.5)', backgroundColor: 'rgba(220,38,38,0.15)',
     borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4,
   },
@@ -191,11 +192,11 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 15, fontWeight: '700', color: t.text },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
   option: {
-    width: '48.5%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    borderWidth: 1, borderColor: t.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 14,
-    backgroundColor: '#fff',
+    flexBasis: '48%', flexGrow: 1, flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between', gap: 8, borderWidth: 1, borderColor: t.border,
+    borderRadius: 12, paddingHorizontal: 12, paddingVertical: 14, backgroundColor: '#fff',
   },
-  full: { width: '100%' },
+  full: { flexBasis: '100%' },
   optionOn: { backgroundColor: t.blue, borderColor: t.blue },
   optionText: { fontSize: 14, fontWeight: '700', color: t.text, flexShrink: 1 },
   radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 1.5, borderColor: '#CBD5E1' },
