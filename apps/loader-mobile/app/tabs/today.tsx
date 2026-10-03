@@ -1,4 +1,1 @@
-// Today's Loading
-import { TodayScreen } from '../../src/features/today/TodayScreen';
-
-export default TodayScreen;
+export { default } from '../../src/features/today/TodayScreen';
