@@ -8,10 +8,7 @@ export default function TripComplete() {
   return (
     <TripCompleteScreen
       data={mockTripComplete}
-      onReviewRecords={() => {
-        // TODO: open the trip records list once it is designed
-        console.log("review trip records");
-      }}
+     onReviewRecords={() => router.push("/trip-records")}
       onViewSync={() => router.navigate("/sync")}
       onBackToToday={() => router.navigate("/today")}
     />
