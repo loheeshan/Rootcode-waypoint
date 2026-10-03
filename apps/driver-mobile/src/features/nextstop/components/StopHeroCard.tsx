@@ -13,7 +13,8 @@ type Props = {
   windowEnd: string;
   eta: string;
   completedStops: number;
-  variant?: "range" | "recorded";
+  variant?: "range" | "recorded" | "departed";
+  departedAt?: string;
 };
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -29,25 +30,35 @@ export function StopHeroCard({
   eta,
   completedStops,
   variant = "range",
+  departedAt,
 }: Props) {
   const remaining = Math.max(stopTotal - stopNo, 0);
   const isLast = stopNo >= stopTotal;
 
   const labels =
-    variant === "recorded"
+    variant === "departed"
       ? {
-          left: `${completedStops} recorded`,
+          left: `Left ${departedAt ?? "--:--"}`,
           mid: `Stop ${stopNo}`,
-          right: isLast ? "Final stop" : `${remaining} remaining`,
-        }
-      : {
-          left:
-            completedStops > 0
-              ? `Stop 01–${pad(completedStops)} Complete`
-              : "No stops complete",
-          mid: `Stop ${pad(stopNo)} Active`,
           right: isLast ? "Final stop" : `${remaining} Stops Remaining`,
-        };
+        }
+      : variant === "recorded"
+        ? {
+            left: `${completedStops} recorded`,
+            mid: `Stop ${stopNo}`,
+            right: isLast ? "Final stop" : `${remaining} remaining`,
+          }
+        : {
+            left:
+              completedStops > 0
+                ? `Stop 01–${pad(completedStops)} Complete`
+                : "No stops complete",
+            mid: `Stop ${pad(stopNo)} Active`,
+            right: isLast ? "Final stop" : `${remaining} Stops Remaining`,
+          };
+
+  // "recorded" and "departed" show a plain track, like the design
+  const plainBar = variant === "recorded" || variant === "departed";
 
   return (
     <LinearGradient colors={[N.heroTop, N.heroBottom]} style={styles.card}>
@@ -94,7 +105,7 @@ export function StopHeroCard({
           <Text style={styles.progressMuted}>{labels.right}</Text>
         </View>
 
-        {variant === "recorded" ? (
+        {plainBar ? (
           <View style={styles.bar} />
         ) : (
           <View style={styles.bar}>
