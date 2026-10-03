@@ -1,4 +1,4 @@
-"""Password and access-token primitives; HTTP authentication follows separately."""
+"""Password hashing and access-token primitives used by HTTP authentication."""
 
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4

@@ -1,5 +1,15 @@
+import type { Role } from '@waypoint/shared-types';
+
 export type { Role, OrderStatus, TripStatus, SyncStatus } from '@waypoint/shared-types';
 export interface HealthResponse { status: 'ok'; service: string; version: string }
+export interface LoginRequest { email: string; password: string }
+export interface AuthUser { id: string; email: string; is_active: boolean; roles: Role[] }
+export interface LoginResponse {
+  access_token: string;
+  token_type: 'bearer';
+  expires_in: number;
+  user: AuthUser;
+}
 export class ApiError extends Error {
   constructor(public readonly status: number, message: string) { super(message); this.name = 'ApiError'; }
 }

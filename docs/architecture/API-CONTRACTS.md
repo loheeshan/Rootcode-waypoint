@@ -1,12 +1,12 @@
 # API Contracts
 
-## Foundation implementation status
+## Implementation status
 
-The endpoints below are the planned business API, not implemented routes. The
-repository foundation currently exposes only `GET /health`, `GET /ready`, and
-the same checks under `/api/v1`. Health returns `status`, `service`, and `version`;
-readiness returns 200 when PostgreSQL is reachable and 503 otherwise. Domain
-payload schemas and authentication will be added in the contract/auth branches.
+Authentication routes below are implemented. Store, Dispatcher, Loader and
+Driver business routes remain planned. The API also exposes `GET /health`,
+`GET /ready`, and the same checks under `/api/v1`. Health returns `status`,
+`service`, and `version`; readiness returns 200 when PostgreSQL is reachable
+and 503 otherwise. No demo accounts are seeded yet.
 
 ## Contract freeze
 
@@ -22,6 +22,56 @@ Breaking changes require updates to:
 POST /api/v1/auth/login
 GET  /api/v1/me
 ```
+
+Login accepts `Content-Type: application/json`:
+
+```json
+{"email": "driver@example.com", "password": "<account-password>"}
+```
+
+The email is trimmed, lowercased and validated. Passwords are preserved exactly
+and must contain 1–1024 UTF-8 bytes. Extra fields are rejected. A successful
+login returns 200 with this shape (values are illustrative, not seeded credentials):
+
+```json
+{
+  "access_token": "<signed-access-token>",
+  "token_type": "bearer",
+  "expires_in": 1800,
+  "user": {
+    "id": "8ea62421-3813-4d37-a06b-546b5f9d75fd",
+    "email": "driver@example.com",
+    "is_active": true,
+    "roles": ["DRIVER"]
+  }
+}
+```
+
+`expires_in` is seconds, controlled by `ACCESS_TOKEN_EXPIRE_MINUTES` (default 30).
+`GET /api/v1/me` takes `Authorization: Bearer <access_token>` and returns the
+same user shape directly, without the login wrapper. Roles are sorted and may
+be `DISPATCHER`, `STORE_MANAGER`, `DRIVER`, or `LOADER`; the list can be empty.
+The API reloads the user's active status and role assignments from the database
+on every authenticated request. Token claims never grant roles. Successful auth
+responses use `Cache-Control: no-store`.
+
+| Status | Meaning | Body |
+|---|---|---|
+| 401 | Incorrect credentials, unknown/inactive user, or missing/invalid/expired bearer token | `{"detail":"Invalid or missing credentials"}` |
+| 403 | Authenticated user lacks a role required by a protected route | `{"detail":"Insufficient permissions"}` |
+| 422 | Invalid login JSON or fields | `{"detail":[{"loc":["body","email"],"msg":"...","type":"..."}]}` |
+| 503 | Authentication signing key is unavailable/invalid or database query fails | `{"detail":"Authentication unavailable"}` |
+
+401 responses include `WWW-Authenticate: Bearer`. Validation errors contain only
+`loc`, `msg` and `type`, with no raw input or password values. A roleless active
+account can log in and read `/me`, but cannot pass a role guard. Resource ownership
+(outlet/depot/trip access) must be checked separately by future domain routes.
+
+The shared `@waypoint/api-contracts` package exports `LoginRequest`, `LoginResponse`
+and `AuthUser`. Its client accepts a token provider and sends the bearer header;
+it does not store credentials. Client sign-in screens and account seeding remain
+pending. There is no refresh endpoint yet; expired tokens require another login.
+See the [auth setup guide](../../apps/api/app/auth/README.md) for signing-key setup.
 
 ## Store Manager
 

@@ -16,10 +16,11 @@ This is a processing limit, not the final account password policy.
 Tokens expire after 30 minutes by default and require a UUID subject and token
 ID, issue/not-before/expiry times, issuer, audience, and `token_type=access`.
 The accepted algorithm is fixed in code. Token verification returns a user ID;
-future request guards must load that user's active state and roles from the
-database. Roles are not trusted from token claims.
+request guards load that user's active state and roles from the database on
+every request. Roles are not trusted from token claims. Disabling/deleting a
+user or removing their role takes effect on their next authenticated request.
 
-Before using token helpers, generate a signing key from `apps/api`:
+Before using login, generate a signing key from `apps/api`:
 
 ```powershell
 uv run python -c "import secrets; print(secrets.token_urlsafe(48))"
@@ -38,11 +39,37 @@ issuer, or audience invalidates previously issued tokens. Docker Compose passes
 these values into the API container.
 
 Run `uv sync --frozen`, `uv run ruff check .`, `uv run mypy app`, and
-`uv run pytest -q` from `apps/api`. No database migration is needed for these
-helpers. They do not create accounts or expose login endpoints.
+`uv run pytest -q` from `apps/api`. Apply the existing migrations with
+`uv run alembic upgrade head` before logging in; this increment adds no migration.
 
-Email validation, login, `/me`, role guards, account/outlet/depot scope, demo
-accounts, and refresh/revocation behavior remain future work.
+## HTTP authentication
+
+- `POST /api/v1/auth/login` accepts JSON `email` and `password`. Email is trimmed,
+  lowercased and validated; passwords are preserved exactly. Extra fields are
+  rejected. An active account with a matching password receives a bearer token,
+  lifetime in seconds, and safe user fields.
+- `GET /api/v1/me` requires `Authorization: Bearer <access_token>` and returns
+  `id`, `email`, `is_active`, and current `roles`. Password hashes are never returned.
+- Invalid credentials, inactive accounts and unknown accounts share a generic
+  401 response. Invalid/missing/expired tokens also return 401. Invalid JSON input
+  returns 422 without echoing raw input. Signing-key and database errors return 503.
+- Successful login and `/me` responses use `Cache-Control: no-store`.
+
+See the [JSON contract](../../../../docs/architecture/API-CONTRACTS.md#auth)
+and OpenAPI at `/docs`. Use JSON login to obtain a token, then paste the token
+into the Swagger **Authorize** bearer field.
+
+For authenticated routes, use `Depends(get_current_user)`. For role access use
+`Depends(require_roles(RoleCode.DISPATCHER))`, or pass several roles to allow
+any of them. A valid user without an allowed role receives 403. These guards
+do not enforce outlet/depot ownership; each domain endpoint must add its scope
+checks before exposing business data.
+
+No users or default passwords are created. Demo account seeding is the next
+increment; frontend sign-in screens are not connected yet. Account/outlet/depot
+scope, password recovery, refresh tokens, per-token revocation and login rate
+limiting remain future work. Until refresh is implemented, expired tokens require
+another login. Client logout must discard its stored token.
 
 Library references: [Argon2 password hashing](https://argon2-cffi.readthedocs.io/en/stable/howto.html)
 and [PyJWT validation](https://pyjwt.readthedocs.io/en/stable/api.html).

@@ -13,8 +13,13 @@ Monorepo boilerplate for the delivery operations application described in the su
 The backend includes identity, fleet and order models with migrations
 `0001_user_roles`, `0002_fleet_foundation` and `0003_orders`. They create users,
 roles, user-role assignments, depots, outlets, vehicles and orders, and seed the
-four role definitions.
-Authentication/RBAC, remaining domain tables,
+four role definitions. JSON login (`POST /api/v1/auth/login`), current user
+(`GET /api/v1/me`), Argon2id passwords, signed access tokens and reusable role
+guards are implemented. See the [auth setup guide](apps/api/app/auth/README.md)
+to configure the signing key and the [API contract](docs/architecture/API-CONTRACTS.md#auth)
+for request/response fields. Accounts are not seeded and sign-in screens are not
+connected yet.
+Outlet/depot ownership checks, remaining domain tables,
 business endpoints, optimization, account/dataset seed imports, POD capture, offline
 outbox processing and end-to-end workflows are **not implemented**. Public starter
 pages contain no real data. `scripts/seed.py` and `scripts/validate-plan.py`
@@ -125,7 +130,7 @@ uv run mypy app
 uv run pytest
 ```
 
-`pnpm build` builds the web app. `pnpm export:mobile` bundles Android and iOS JavaScript for both apps; it does not produce APK/IPA binaries. Root tests cover the shared client, and API tests cover health, readiness, CORS, identity, fleet and order constraints, migration rollback/reapply, and model/migration alignment. Add feature tests as each workflow is implemented.
+`pnpm build` builds the web app. `pnpm export:mobile` bundles Android and iOS JavaScript for both apps; it does not produce APK/IPA binaries. Root tests cover the shared client, and API tests cover health, readiness, CORS, identity, fleet and order constraints, migration rollback/reapply, model/migration alignment, password/token validation, JSON login, current-user access and the four-role permission matrix. Add feature tests as each workflow is implemented.
 
 ## Next implementation branches
 
