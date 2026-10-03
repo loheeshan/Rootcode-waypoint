@@ -14,28 +14,32 @@ type OptionProps = {
   selected: boolean;
   icon: React.ComponentProps<typeof MaterialCommunityIcons>["name"];
   iconColor: string;
+  outlined?: boolean;
   onPress: () => void;
 };
 
-function Option({ label, selected, icon, iconColor, onPress }: OptionProps) {
+function Option({ label, selected, icon, iconColor, outlined, onPress }: OptionProps) {
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="radio"
       accessibilityState={{ selected }}
-      style={[styles.option, selected && styles.optionOn]}
+      style={[
+        styles.option,
+        outlined && styles.optionOutlined,
+        selected && styles.optionOn,
+      ]}
     >
-      <MaterialCommunityIcons
-        name={icon}
-        size={24}
-        color={selected ? iconColor : D.muted}
-      />
+      <MaterialCommunityIcons name={icon} size={24} color={iconColor} />
       <Text style={[styles.optionText, selected && styles.optionTextOn]}>{label}</Text>
     </Pressable>
   );
 }
 
 export function OutcomeToggle({ value, onChange, onCantDeliver }: Props) {
+  const delivered = value === "delivered";
+  const partial = value === "partial";
+
   return (
     <View>
       <View style={styles.headRow}>
@@ -44,19 +48,21 @@ export function OutcomeToggle({ value, onChange, onCantDeliver }: Props) {
           <Text style={styles.cant}>Can't deliver? Tap here → R5</Text>
         </Pressable>
       </View>
+
       <View style={styles.row}>
         <Option
           label="Delivered"
-          selected={value === "delivered"}
+          selected={delivered}
+          outlined
           icon="check-circle"
-          iconColor="#2ED47A"
+          iconColor={delivered ? "#2ED47A" : D.green}
           onPress={() => onChange("delivered")}
         />
         <Option
           label="Partially Delivered"
-          selected={value === "partial"}
+          selected={partial}
           icon="package-variant-remove"
-          iconColor={D.amber}
+          iconColor={partial ? "#8C97C4" : D.muted}
           onPress={() => onChange("partial")}
         />
       </View>
@@ -87,6 +93,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: D.border,
   },
+  optionOutlined: { borderColor: D.primary },
   optionOn: { backgroundColor: D.selectedBg, borderColor: D.primary },
   optionText: {
     flexShrink: 1,
