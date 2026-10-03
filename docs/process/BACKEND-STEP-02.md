@@ -48,8 +48,10 @@ docker compose exec api alembic current
 docker compose exec api alembic check
 ```
 
-Expected revision: `0002_fleet_foundation (head)`. `alembic check` should report
-no new upgrade operations. A fresh database has six application tables plus
+At this fleet increment, the expected revision was `0002_fleet_foundation (head)`.
+Newer checkouts also apply later migrations; see the [root README](../../README.md)
+for the current head. `alembic check` should report no new upgrade operations.
+At the fleet revision, a fresh database has six application tables plus
 `alembic_version`; only the four role definitions are inserted by migrations.
 An existing database retains its identity records. Running `upgrade head`
 again does not duplicate tables or seed records.
@@ -123,5 +125,6 @@ After all three commits have been pushed, open a pull request from
 before starting the next backend branch. See [GitHub setup](GITHUB-SETUP.md) for
 the repository's pull request workflow.
 
-The next planned database increment is order models and their migration, split
-into reviewable commits following [COMMIT-PLAN.md](COMMIT-PLAN.md).
+The following order increment is documented in the
+[order module guide](../../apps/api/app/orders/README.md), following
+[COMMIT-PLAN.md](COMMIT-PLAN.md).

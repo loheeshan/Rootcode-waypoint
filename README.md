@@ -10,9 +10,10 @@ Monorepo boilerplate for the delivery operations application described in the su
 - Five shared TypeScript packages, a credential-storage-free API client, matching status types, starter UI components and provisional design tokens.
 - pnpm and uv lockfiles, checks, GitHub Actions, Docker Compose, environment templates, and the original architecture/process documents.
 
-The backend includes identity and fleet models with migrations `0001_user_roles`
-and `0002_fleet_foundation`. They create users, roles, user-role assignments,
-depots, outlets and vehicles, and seed the four role definitions.
+The backend includes identity, fleet and order models with migrations
+`0001_user_roles`, `0002_fleet_foundation` and `0003_orders`. They create users,
+roles, user-role assignments, depots, outlets, vehicles and orders, and seed the
+four role definitions.
 Authentication/RBAC, remaining domain tables,
 business endpoints, optimization, account/dataset seed imports, POD capture, offline
 outbox processing and end-to-end workflows are **not implemented**. Public starter
@@ -83,7 +84,7 @@ Set-Location D:\Rootcode
 corepack pnpm dev:web
 ```
 
-Open [web](http://localhost:3000), [API docs](http://localhost:8000/docs), [liveness](http://localhost:8000/health), and [database readiness](http://localhost:8000/ready). Liveness works without a database; readiness returns 503 when PostgreSQL cannot be reached. Migrations create the identity and fleet tables and four role definitions. No demo accounts or fleet records are inserted.
+Open [web](http://localhost:3000), [API docs](http://localhost:8000/docs), [liveness](http://localhost:8000/health), and [database readiness](http://localhost:8000/ready). Liveness works without a database; readiness returns 503 when PostgreSQL cannot be reached. Migrations create the identity, fleet and order tables and four role definitions. No demo accounts, fleet records or orders are inserted.
 
 Terminal 3 — Driver or Loader:
 
@@ -110,7 +111,7 @@ docker compose exec api alembic check
 
 This starts PostgreSQL, FastAPI and the web app. Mobile apps run separately. The Compose configuration is for local development; the web's API URL is compiled at build time. `docker compose down` preserves the named database volume. Migrations are explicit commands; the API does not create or alter tables at startup.
 
-Current migration: `0002_fleet_foundation (head)`. For API-only startup and the
+Current migration: `0003_orders (head)`. For API-only startup and the
 Windows host-port workaround, see [Backend step 2](docs/process/BACKEND-STEP-02.md).
 
 ## Checks
@@ -124,7 +125,7 @@ uv run mypy app
 uv run pytest
 ```
 
-`pnpm build` builds the web app. `pnpm export:mobile` bundles Android and iOS JavaScript for both apps; it does not produce APK/IPA binaries. Root tests cover the shared client, and API tests cover health, readiness, CORS, identity and fleet constraints, migration rollback/reapply, and model/migration alignment. Add feature tests as each workflow is implemented.
+`pnpm build` builds the web app. `pnpm export:mobile` bundles Android and iOS JavaScript for both apps; it does not produce APK/IPA binaries. Root tests cover the shared client, and API tests cover health, readiness, CORS, identity, fleet and order constraints, migration rollback/reapply, and model/migration alignment. Add feature tests as each workflow is implemented.
 
 ## Next implementation branches
 
@@ -132,8 +133,8 @@ Follow [CONTRIBUTING.md](CONTRIBUTING.md) and [the commit plan](docs/process/COM
 
 The backend increments and their commit/push commands are documented in
 [Backend step 1: identity](docs/process/BACKEND-STEP-01.md) and
-[Backend step 2: fleet](docs/process/BACKEND-STEP-02.md). Order tables are next in
-the database commit plan.
+[Backend step 2: fleet](docs/process/BACKEND-STEP-02.md). The
+[order module guide](apps/api/app/orders/README.md) covers the order migration.
 
 The canonical architecture is in [docs/architecture](docs/architecture/SYSTEM-ARCHITECTURE.md). Original `Main/` documents are retained as references; detailed role screens there and in `docs/roles` describe future implementation, not completed functionality. Starter token values are not claimed to match Figma.
 

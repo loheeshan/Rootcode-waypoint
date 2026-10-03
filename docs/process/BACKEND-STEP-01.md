@@ -2,9 +2,8 @@
 
 Branch: `feature/db-users-roles`
 
-This guide records the identity increment. The current checkout also includes
-the fleet migration; see [Backend step 2](BACKEND-STEP-02.md) for the current
-schema and setup.
+This guide records the identity increment. Later migrations are also included;
+see the [root README](../../README.md) for the current revision and setup.
 
 This increment adds three identity tables and the four role definitions. It does
 not add login or create user accounts. It is organized into four commits so each
@@ -48,8 +47,8 @@ uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 At the identity-only revision, the expected migration was `0001_user_roles (head)`.
-In the current checkout, `upgrade head` also applies the fleet migration and
-`current` reports `0002_fleet_foundation (head)`. `alembic check` should report no
+In newer checkouts, `upgrade head` also applies later migrations; see the
+[root README](../../README.md) for the expected head. `alembic check` should report no
 new upgrade operations. The first migration creates three tables and four role
 rows, plus Alembic's version table. It inserts no user records. Database migrations are
 explicit commands and are not executed by `/health` or `/ready`.
