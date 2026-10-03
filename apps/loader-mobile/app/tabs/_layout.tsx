@@ -1,9 +1,6 @@
 // shared header + tab bar
 import { Tabs } from 'expo-router';
 
-import { AppHeader } from '../../src/components/AppHeader';
-import { AppTabBar } from '../../src/components/AppTabBar';
-
 /**
  * Routes that are not tabs. The value is the tab that should look selected
  * while that screen is open (null = none).
