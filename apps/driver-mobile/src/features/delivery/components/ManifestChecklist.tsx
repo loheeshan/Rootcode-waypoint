@@ -1,10 +1,11 @@
 import { View, Text, StyleSheet } from "react-native";
 import { D } from "../../../theme/deliveryColor";
-import { ExceptionCode, ManifestItemData } from "../types";
+import { DeliveryOutcome, ExceptionCode, ManifestItemData } from "../types";
 import { ManifestItemCard } from "./ManifestItemCard";
 
 type Props = {
   items: ManifestItemData[];
+  outcome: DeliveryOutcome;
   quantities: Record<string, number>;
   exceptions: Record<string, ExceptionCode>;
   onQtyChange: (id: string, n: number) => void;
@@ -13,6 +14,7 @@ type Props = {
 
 export function ManifestChecklist({
   items,
+  outcome,
   quantities,
   exceptions,
   onQtyChange,
@@ -22,16 +24,19 @@ export function ManifestChecklist({
   const verified = items.reduce((sum, i) => sum + (quantities[i.id] ?? 0), 0);
   const complete = verified === total;
 
+  const subtitle =
+    outcome === "partial"
+      ? "Check quantities delivered for each line"
+      : complete
+        ? `All ${total} Cartons Verified In-Chamber`
+        : `${verified} of ${total} Cartons Verified`;
+
   return (
     <View style={styles.card}>
       <View style={styles.head}>
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>Manifest Checklist</Text>
-          <Text style={styles.sub}>
-            {complete
-              ? `All ${total} Cartons Verified In-Chamber`
-              : `${verified} of ${total} Cartons Verified`}
-          </Text>
+          <Text style={styles.sub}>{subtitle}</Text>
         </View>
         <View
           style={[styles.count, { backgroundColor: complete ? D.greenBg : D.amberBg }]}
