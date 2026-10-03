@@ -66,3 +66,17 @@ export const mockNextStopDeparted: NextStopSnapshot = {
   progressVariant: "departed",
   departedAt: "03:30",
 };
+// TODO(feature/driver-sqlite): the next stop is read from SQLite after the first record is saved
+export const mockNextStopSecond: NextStopSnapshot = {
+  ...mockNextStop,
+  stopNo: 2,
+  outletCode: "OUT012",
+  outletName: "OUT012 Food City Bambalapitiya",
+  address: "Bambalapitiya · curbside unloading",
+  windowStart: "04:50",
+  windowEnd: "05:30",
+  eta: "05:05",
+  completedStops: 1,
+  progressVariant: "recordedStops",
+  wrapTitle: true,
+};
