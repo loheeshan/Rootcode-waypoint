@@ -1,7 +1,6 @@
-"""Order definitions for the next database migration.
+"""Order storage registered in app.db.models for Alembic.
 
-Register these models in app.db.models together with their migration. Order
-submission, cutoff rules, authorization and status transitions are separate work.
+Order submission, cutoff rules, authorization and status transitions are separate work.
 """
 
 from __future__ import annotations

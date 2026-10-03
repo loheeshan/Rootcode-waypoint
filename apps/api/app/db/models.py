@@ -3,5 +3,6 @@
 from app.auth.models import Role, User, UserRole
 from app.db.base import Base
 from app.fleet.models import Depot, Outlet, Vehicle
+from app.orders.models import Order
 
-__all__ = ["Base", "Depot", "Outlet", "Role", "User", "UserRole", "Vehicle"]
+__all__ = ["Base", "Depot", "Order", "Outlet", "Role", "User", "UserRole", "Vehicle"]
