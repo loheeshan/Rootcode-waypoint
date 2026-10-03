@@ -3,7 +3,14 @@ import type { Role } from '@waypoint/shared-types';
 export type { Role, OrderStatus, TripStatus, SyncStatus } from '@waypoint/shared-types';
 export interface HealthResponse { status: 'ok'; service: string; version: string }
 export interface LoginRequest { email: string; password: string }
-export interface AuthUser { id: string; email: string; is_active: boolean; roles: Role[] }
+export interface AuthUser {
+  id: string;
+  email: string;
+  is_active: boolean;
+  roles: Role[];
+  outlet_ids: string[];
+  depot_ids: string[];
+}
 export interface LoginResponse {
   access_token: string;
   token_type: 'bearer';

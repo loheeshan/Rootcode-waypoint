@@ -10,6 +10,7 @@ from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, String, U
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.fleet.models import Depot, Outlet
 
 
 class RoleCode(StrEnum):
@@ -36,6 +37,12 @@ class User(Base):
     )
 
     role_assignments: Mapped[list[UserRole]] = relationship(
+        back_populates="user", cascade="all, delete-orphan", passive_deletes=True
+    )
+    outlet_assignments: Mapped[list[UserOutlet]] = relationship(
+        back_populates="user", cascade="all, delete-orphan", passive_deletes=True
+    )
+    depot_assignments: Mapped[list[UserDepot]] = relationship(
         back_populates="user", cascade="all, delete-orphan", passive_deletes=True
     )
 
@@ -65,3 +72,33 @@ class UserRole(Base):
 
     user: Mapped[User] = relationship(back_populates="role_assignments")
     role: Mapped[Role] = relationship()
+
+
+class UserOutlet(Base):
+    """Explicit outlet assignment; a matching route role is also required for access."""
+
+    __tablename__ = "user_outlets"
+
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True,
+    )
+    outlet_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("outlets.id", ondelete="CASCADE"), primary_key=True, index=True,
+    )
+    user: Mapped[User] = relationship(back_populates="outlet_assignments")
+    outlet: Mapped[Outlet] = relationship()
+
+
+class UserDepot(Base):
+    """Explicit depot assignment; it never grants outlet or trip access implicitly."""
+
+    __tablename__ = "user_depots"
+
+    user_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True,
+    )
+    depot_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("depots.id", ondelete="CASCADE"), primary_key=True, index=True,
+    )
+    user: Mapped[User] = relationship(back_populates="depot_assignments")
+    depot: Mapped[Depot] = relationship()

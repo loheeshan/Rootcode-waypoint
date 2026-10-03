@@ -43,7 +43,9 @@ login returns 200 with this shape (values are illustrative, not seeded credentia
     "id": "8ea62421-3813-4d37-a06b-546b5f9d75fd",
     "email": "driver@example.com",
     "is_active": true,
-    "roles": ["DRIVER"]
+    "roles": ["DRIVER"],
+    "outlet_ids": [],
+    "depot_ids": []
   }
 }
 ```
@@ -52,21 +54,30 @@ login returns 200 with this shape (values are illustrative, not seeded credentia
 `GET /api/v1/me` takes `Authorization: Bearer <access_token>` and returns the
 same user shape directly, without the login wrapper. Roles are sorted and may
 be `DISPATCHER`, `STORE_MANAGER`, `DRIVER`, or `LOADER`; the list can be empty.
-The API reloads the user's active status and role assignments from the database
-on every authenticated request. Token claims never grant roles. Successful auth
-responses use `Cache-Control: no-store`.
+`outlet_ids` and `depot_ids` are sorted arrays of UUID strings identifying explicit
+resource assignments. Both arrays are empty for existing/demo users until a
+trusted data setup assigns resources. A depot assignment does not implicitly
+grant Store Manager access to its outlets, or Driver access to its trips.
+The API reloads active status, roles and resource assignments from the database
+on every authenticated request. Token claims never grant roles or resource
+access. Successful auth responses use `Cache-Control: no-store`.
 
 | Status | Meaning | Body |
 |---|---|---|
 | 401 | Incorrect credentials, unknown/inactive user, or missing/invalid/expired bearer token | `{"detail":"Invalid or missing credentials"}` |
-| 403 | Authenticated user lacks a role required by a protected route | `{"detail":"Insufficient permissions"}` |
+| 403 | Authenticated user lacks the required role or resource assignment | `{"detail":"Insufficient permissions"}` |
 | 422 | Invalid login JSON or fields | `{"detail":[{"loc":["body","email"],"msg":"...","type":"..."}]}` |
 | 503 | Authentication signing key is unavailable/invalid or database query fails | `{"detail":"Authentication unavailable"}` |
 
 401 responses include `WWW-Authenticate: Bearer`. Validation errors contain only
 `loc`, `msg` and `type`, with no raw input or password values. A roleless active
-account can log in and read `/me`, but cannot pass a role guard. Resource ownership
-(outlet/depot/trip access) must be checked separately by future domain routes.
+account can log in and read `/me`, but cannot pass a role guard. Outlet/depot
+scope helpers require both a matching role and a current assignment. Future
+business routes must call those checks and filter collection queries to assigned
+resources. Trip/Driver assignment checks remain future work.
+
+Login accepts only `email` and `password`; attempts to supply roles, `outlet_ids`
+or `depot_ids` are rejected with 422. No public API can change assignments.
 
 The shared `@waypoint/api-contracts` package exports `LoginRequest`, `LoginResponse`
 and `AuthUser`. Its client accepts a token provider and sends the bearer header;

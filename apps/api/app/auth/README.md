@@ -16,9 +16,10 @@ This is a processing limit, not the final account password policy.
 Tokens expire after 30 minutes by default and require a UUID subject and token
 ID, issue/not-before/expiry times, issuer, audience, and `token_type=access`.
 The accepted algorithm is fixed in code. Token verification returns a user ID;
-request guards load that user's active state and roles from the database on
-every request. Roles are not trusted from token claims. Disabling/deleting a
-user or removing their role takes effect on their next authenticated request.
+request guards load that user's active state, roles and resource assignments
+from the database on every request. Roles and resource IDs are not trusted from
+token claims. Disabling/deleting a user or removing their role or assignment
+takes effect on their next authenticated request.
 
 Before using login, generate a signing key from `apps/api`:
 
@@ -40,7 +41,8 @@ these values into the API container.
 
 Run `uv sync --frozen`, `uv run ruff check .`, `uv run mypy app`, and
 `uv run pytest -q` from `apps/api`. Apply the existing migrations with
-`uv run alembic upgrade head` before logging in; this increment adds no migration.
+`uv run alembic upgrade head` before logging in. Current revision is
+`0004_user_scopes`; the updated login queries require its two mapping tables.
 
 ## HTTP authentication
 
@@ -49,7 +51,8 @@ Run `uv sync --frozen`, `uv run ruff check .`, `uv run mypy app`, and
   rejected. An active account with a matching password receives a bearer token,
   lifetime in seconds, and safe user fields.
 - `GET /api/v1/me` requires `Authorization: Bearer <access_token>` and returns
-  `id`, `email`, `is_active`, and current `roles`. Password hashes are never returned.
+  `id`, `email`, `is_active`, current `roles`, `outlet_ids` and `depot_ids`.
+  Password hashes are never returned.
 - Invalid credentials, inactive accounts and unknown accounts share a generic
   401 response. Invalid/missing/expired tokens also return 401. Invalid JSON input
   returns 422 without echoing raw input. Signing-key and database errors return 503.
@@ -61,11 +64,45 @@ into the Swagger **Authorize** bearer field.
 
 For authenticated routes, use `Depends(get_current_user)`. For role access use
 `Depends(require_roles(RoleCode.DISPATCHER))`, or pass several roles to allow
-any of them. A valid user without an allowed role receives 403. These guards
-do not enforce outlet/depot ownership; each domain endpoint must add its scope
-checks before exposing business data.
+any of them. A valid user without an allowed role receives 403.
 
-Frontend sign-in screens are not connected yet. Account/outlet/depot scope,
+## Outlet and depot access
+
+`UserOutlet` and `UserDepot` hold explicit assignments. Their composite primary
+keys prevent duplicate grants, and foreign keys require existing users and
+resources. A user may have multiple assignments. Deleting a user/resource
+revokes its mappings; removing a mapping never deletes the user or resource.
+
+After obtaining the current user, a Store Manager route can call:
+
+```python
+require_outlet_access(user, outlet_id, role=RoleCode.STORE_MANAGER)
+```
+
+A Dispatcher route can call:
+
+```python
+require_depot_access(user, depot_id, role=RoleCode.DISPATCHER)
+```
+
+Both functions are in `app.auth.scopes` and require an active user, the route's
+specified role, and an exact assignment. The role must be a constant chosen by
+the endpoint, never taken from client input. Missing assignments return the same
+403 as an incorrect role. No role bypasses scope checks automatically.
+
+Collection endpoints must also filter their database queries by the user's
+assigned resources. For depot-scoped order operations, resolve the actual
+outlet/depot relationship in the database before checking depot access. Do not
+trust a separate client-supplied depot ID. These helpers do not implement Driver
+trip assignment checks or expose business endpoints by themselves.
+
+Login and `/me` include sorted `outlet_ids` and `depot_ids`; empty arrays grant
+no resource access. They describe assignments, not additional roles. The new
+migration and existing demo seed leave these mappings empty. A trusted data
+setup must insert approved assignments; no public account can self-assign an
+outlet/depot. No fleet records or mappings are guessed from an email address.
+
+Frontend sign-in screens are not connected yet. Business-route scope enforcement,
 password recovery, refresh tokens, per-token revocation and login rate limiting
 remain future work. Until refresh is implemented, expired tokens require another
 login. Client logout must discard its stored token.
@@ -122,7 +159,7 @@ password, and its current roles may differ from the table above.
 With `JWT_SECRET_KEY` configured as described above, open `/docs`, call JSON login
 with a seeded email and the password you chose, paste the returned token into
 **Authorize**, then call `GET /api/v1/me`. No default password exists. Fleet/order
-dataset imports and outlet/depot assignments are separate future increments.
+dataset imports and demo outlet/depot assignment setup are future increments.
 
 Library references: [Argon2 password hashing](https://argon2-cffi.readthedocs.io/en/stable/howto.html)
 and [PyJWT validation](https://pyjwt.readthedocs.io/en/stable/api.html).
