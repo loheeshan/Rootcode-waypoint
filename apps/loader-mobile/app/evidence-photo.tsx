@@ -14,14 +14,15 @@ export default function EvidencePhotoScreen() {
     else router.replace('/');
   };
 
-    const handleTakeSamplePhoto = () => {
-    // Simulated capture. The real save to SQLite happens when the evidence is accepted
-    // on the next popup (see app/evidence-ready.tsx).
-    setVisible(false);
-    router.replace('/evidence-ready');
+  const handleTakeSamplePhoto = () => {
+    // Loader offline rule: save locally first, then sync later.
+    // TODO(feature/loader-sqlite, feature/loader-sync):
+    //   save the sample photo reference to Expo SQLite and queue an outbox event.
+    //   The UI should then show "Saved on device / Dispatcher has not received this yet".
+    leave();
   };
 
-   const handlePermissionDenied = () => {
+  const handlePermissionDenied = () => {
     // Simulates the camera permission being denied.
     setVisible(false);
     router.replace('/camera-unavailable');
