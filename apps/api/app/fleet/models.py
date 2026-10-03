@@ -1,6 +1,6 @@
 """Fleet master data registered in app.db.models for Alembic.
 
-Vehicle availability, fuel consumption records and planning constraints are separate work.
+Daily availability and fuel totals live in operations_models; planning enforcement is separate.
 """
 
 from __future__ import annotations

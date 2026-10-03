@@ -31,6 +31,11 @@ depot/date again returns 409 with the existing plan's Location. Plan detail repo
 saved revision counts, not optimization success. Frontend integration, allocation,
 publishing, loading, delivery and receipt steps remain planned.
 
+Apply migration `0007_fleet_operations` before testing the current backend. It
+adds empty daily vehicle availability/fuel tables without changing the API
+walkthrough. Demo resources have no daily operational inputs yet; missing rows
+mean unknown. Input endpoints and planner enforcement remain future increments.
+
 ## 1. Store Manager
 1. Login.
 2. Create order.
