@@ -21,10 +21,10 @@ export default function EvidencePhotoScreen() {
     router.replace('/evidence-ready');
   };
 
-  const handlePermissionDenied = () => {
+   const handlePermissionDenied = () => {
     // Simulates the camera permission being denied.
-    // TODO: show camera permission guidance (design needed) instead of just leaving.
-    leave();
+    setVisible(false);
+    router.replace('/camera-unavailable');
   };
 
   return (
