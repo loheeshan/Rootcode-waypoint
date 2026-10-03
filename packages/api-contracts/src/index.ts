@@ -1,4 +1,4 @@
-import type { OrderStatus, Role } from '@waypoint/shared-types';
+import type { OrderStatus, PlanStatus, Role } from '@waypoint/shared-types';
 
 export type {
   Role, OrderStatus, TripStatus, PlanStatus, StopStatus, AssignmentOutcome, DeferralReason, SyncStatus,
@@ -85,6 +85,37 @@ export interface DispatcherOrderResponse extends OrderResponse {
 }
 export interface DispatcherOrderListResponse {
   items: DispatcherOrderResponse[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+export interface PlanCreateRequest {
+  depot_id: string;
+  delivery_date: string;
+}
+export interface PlanResponse {
+  id: string;
+  depot_id: string;
+  delivery_date: string;
+  status: PlanStatus;
+  created_by: string;
+  created_at: string;
+}
+export interface PlanRevisionResponse {
+  id: string;
+  revision_number: number;
+  status: PlanStatus;
+  published_at: string | null;
+  trip_count: number;
+  served_order_count: number;
+  deferred_order_count: number;
+  unexplained_deferred_count: number;
+}
+export interface PlanDetailResponse extends PlanResponse {
+  revisions: PlanRevisionResponse[];
+}
+export interface PlanListResponse {
+  items: PlanResponse[];
   total: number;
   limit: number;
   offset: number;
