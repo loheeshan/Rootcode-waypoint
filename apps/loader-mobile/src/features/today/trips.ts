@@ -11,13 +11,16 @@ export type Trip = {
   trip: number;
   category: Category;
   tags: string[];
-  departs: string; // '03:30'
-  departsIn: string; // '42m'
-  minutes: number; // minutes until departure, used for sorting
+  departs: string;
+  departsIn: string;
+  minutes: number;
   urgent?: boolean;
   planUpdated?: { title: string; note: string };
   status: TripStatus;
 };
+
+// Set to true to preview VEH018 after sign-off ("Ready · 7 of 7 processed").
+const VEH018_SIGNED_OFF = false;
 
 export const trips: Trip[] = [
   {
@@ -29,7 +32,7 @@ export const trips: Trip[] = [
     departsIn: '42m',
     minutes: 42,
     urgent: true,
-    status: { kind: 'loading', loaded: 5, total: 7, payloadKg: 1820, volumeM3: 14.4 },
+    status: { kind: 'loading', loaded: VEH018_SIGNED_OFF ? 7 : 5, total: 7, payloadKg: 1820, volumeM3: 14.4 },
   },
   {
     id: 'VEH022',
