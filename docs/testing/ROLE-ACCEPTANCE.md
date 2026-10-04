@@ -24,10 +24,10 @@ Use the real FastAPI/PostgreSQL backend; mocked responses do not count. Never re
 
 | Flow | Expected | Result |
 |---|---|---|
-| Login on emulator/device -> `/me` | LOADER, depot scope | NOT RUN |
-| Published trips and stop-ordered manifest | Server trips/orders | NOT RUN |
-| LOADED / MISSING / DAMAGED with notes; retry | One event per action; latest outcome shown | NOT RUN |
-| Ready (all orders recorded, at least one LOADED) | READY visible to the Driver API | NOT RUN |
+| Login on emulator/device -> `/me` | LOADER, depot scope | PASS (Step 5, emulator) |
+| Published trips and stop-ordered manifest | Server trips/orders | PASS (Step 5) |
+| LOADED / MISSING / DAMAGED with notes; retry | One event per action; latest outcome shown | PASS (double tap; device retry after network loss NOT RUN) |
+| Ready (all orders recorded, at least one LOADED) | READY visible to the Driver API | PASS (Step 5; stale sequence refreshes) |
 | Offline save -> kill/relaunch -> reconnect | Events apply exactly once | NOT RUN |
 
 ## Driver (mobile, `driver@waypoint.demo`)

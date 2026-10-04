@@ -68,21 +68,27 @@ export function ActionButton({
   onPress,
   variant = 'primary',
   small,
+  disabled,
 }: {
   label: string;
   onPress: () => void;
   variant?: 'primary' | 'secondary';
   small?: boolean;
+  disabled?: boolean;
 }) {
   const primary = variant === 'primary';
   return (
     <Pressable
       onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !!disabled }}
       style={({ pressed }) => [
         styles.button,
         small && styles.buttonSmall,
         primary ? styles.buttonPrimary : styles.buttonSecondary,
         pressed && { opacity: 0.85 },
+        disabled && { opacity: 0.5 },
       ]}
     >
       <Text style={[styles.buttonText, primary && { color: '#fff' }]}>{label}</Text>

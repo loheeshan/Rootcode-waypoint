@@ -20,8 +20,8 @@ export function getApiClient() {
     try {
       return await call(token);
     } catch (error) {
-      // Only end the session if the rejected token is still current (not a newer sign-in).
-      if (error instanceof ApiError && error.status === 401 && (await session.getToken()) === token) {
+      // End the session only if a token was sent and is still current (not signed out or replaced).
+      if (error instanceof ApiError && error.status === 401 && token && (await session.getToken()) === token) {
         onUnauthorized?.();
       }
       throw error;

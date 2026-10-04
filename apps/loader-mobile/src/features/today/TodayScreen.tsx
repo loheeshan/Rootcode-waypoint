@@ -1,130 +1,126 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ApiError, type LoaderTripListResponse, type LoaderTripResponse, type TripStatus } from '@waypoint/api-contracts';
 
 import { StatusBanner } from '../../components/ui/StatusBanner';
 import { useIsOffline } from '../../hooks/useIsOffline';
+import { getApiClient } from '../../services/api';
+import { useAuth } from '../../services/auth';
 import { t } from '../../theme/loaderTokens';
-import { DispatchHorizonCard } from './components/DispatchHorizonCard';
-import { LockedNotice } from './components/LockedNotice';
-import { SessionMismatchCard } from './components/SessionMismatchCard';
-import { TripCardView } from './components/TripCardView';
-import { trips, type Category } from './trips';
+import { useLoading } from '../loading/LoadingProvider';
+import { TRIP_LABEL, colomboTime, colomboToday, shortId } from '../loading/format';
 
-// Flip to true to preview the session-mismatch design.
-const SIMULATE_MISMATCH = false;
+type Filter = 'ALL' | 'PLANNED' | 'LOADING' | 'READY';
+const FILTERS: [Filter, string][] = [['ALL', 'All'], ['PLANNED', 'Not started'], ['LOADING', 'Loading'], ['READY', 'Ready']];
 
-type Filter = 'All' | Category;
-const filters: Filter[] = ['All', 'Fresh', 'Style', 'Tech'];
-
+/** Published trips in the Loader's depots for today, from GET /loader/trips. */
 export default function TodayScreen() {
+  const router = useRouter();
   const offline = useIsOffline();
-  const [mismatch, setMismatch] = useState(SIMULATE_MISMATCH);
-  const [filter, setFilter] = useState<Filter>('Fresh');
+  const { user } = useAuth();
+  const { select, tripId } = useLoading();
+  const [filter, setFilter] = useState<Filter>('ALL');
+  const [trips, setTrips] = useState<LoaderTripResponse[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const today = colomboToday();
 
-  const counts = useMemo(() => {
-    const c: Record<Filter, number> = { All: trips.length, Fresh: 0, Style: 0, Tech: 0 };
-    trips.forEach((trip) => {
-      c[trip.category] += 1;
-    });
-    return c;
-  }, []);
+  const load = useCallback(async () => {
+    setRefreshing(true);
+    setError(null);
+    try {
+      const page = await getApiClient().request<LoaderTripListResponse>(`/loader/trips?delivery_date=${today}&limit=100`);
+      setTrips(page.items);
+    } catch (failure) {
+      setError(failure instanceof ApiError ? 'Trips could not be loaded. Pull to try again.' : 'No connection. Pull to retry when online.');
+    } finally {
+      setRefreshing(false);
+    }
+  }, [today]);
+
+  // Refetch whenever Today is shown so statuses changed on other tabs (e.g. READY) are current.
+  useFocusEffect(useCallback(() => { void load(); }, [load]));
 
   const visible = useMemo(
-    () =>
-      trips
-        .filter((trip) => filter === 'All' || trip.category === filter)
-        .sort((a, b) => a.minutes - b.minutes),
-    [filter],
+    () => (trips ?? [])
+      .filter((trip) => filter === 'ALL' || trip.status === filter)
+      .sort((a, b) => a.departure_at.localeCompare(b.departure_at)),
+    [trips, filter],
   );
+  const count = (f: Filter) => (trips ?? []).filter((trip) => f === 'ALL' || trip.status === f).length;
 
-  const rightLabel =
-    filter === 'All' ? `${trips.length} Pending` : `${visible.length} trip${visible.length === 1 ? '' : 's'}`;
+  const open = (trip: LoaderTripResponse) => {
+    select(trip.trip_id);
+    router.navigate('/tabs/checklist');
+  };
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      {offline && (
-        <StatusBanner
-          title="No connection"
-          message="— showing plan last synced at 22:10 (Rev 2). New updates will appear when reconnected."
-        />
-      )}
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={styles.content}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={load} />}
+    >
+      {offline && <StatusBanner title="No connection" message="— trips need a connection until offline storage is added." />}
+      <Text style={styles.title}>Today's loading</Text>
 
-      <Text style={styles.title}>Todays Loading</Text>
-
-      {mismatch && (
-        <SessionMismatchCard
-          staleDepot="Kandy"
-          targetDepot="Peliyagoda"
-          onSwitch={() => setMismatch(false)} // TODO: real depot switch
-          onConfirmRemote={() => setMismatch(false)} // TODO: record remote cover
-        />
-      )}
-
-      {/* Live plan banner (hidden while the session mismatch is shown) */}
-      {!mismatch && (
-        <View style={styles.plan}>
-          <View style={styles.spread}>
-            <View style={styles.row}>
-              <View style={styles.liveDot} />
-              <Text style={styles.live}>LIVE PLAN</Text>
-            </View>
-            <Text style={styles.rev}>Rev 2 · 22:10 IST</Text>
+      <View style={styles.plan}>
+        <View style={styles.spread}>
+          <View style={styles.row}>
+            <View style={styles.liveDot} />
+            <Text style={styles.live}>PUBLISHED PLAN</Text>
           </View>
-          <View style={styles.planDivider} />
-          <View style={styles.spread}>
-            <View>
-              <Text style={styles.planLabel}>LOADING FACILITY</Text>
-              <Text style={styles.planValue}>Peliyagoda Central Depot</Text>
-            </View>
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text style={styles.planLabel}>ACTIVE DOCK</Text>
-              <Text style={styles.planValue}>Bay B-04 / B-08</Text>
-            </View>
+          <Text style={styles.rev}>{today}</Text>
+        </View>
+        <View style={styles.planDivider} />
+        <View style={styles.spread}>
+          <View>
+            <Text style={styles.planLabel}>DEPOTS</Text>
+            <Text style={styles.planValue}>{user?.depot_ids.map(shortId).join(', ') || '—'}</Text>
+          </View>
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={styles.planLabel}>TRIPS TODAY</Text>
+            <Text style={styles.planValue}>{trips ? trips.length : '…'}</Text>
           </View>
         </View>
-      )}
+      </View>
 
-      {/* Filters */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
-        {filters.map((f) => {
-          const selected = f === filter;
-          return (
-            <Pressable
-              key={f}
-              onPress={() => setFilter(f)}
-              style={[styles.pill, selected && styles.pillOn]}
-            >
-              {selected && f !== 'All' ? <View style={styles.pillDot} /> : null}
-              <Text style={styles.pillText}>{f}</Text>
-              <View style={[styles.badge, selected && styles.badgeOn]}>
-                <Text style={[styles.badgeText, selected && { color: t.text }]}>{counts[f]}</Text>
-              </View>
-            </Pressable>
-          );
-        })}
+        {FILTERS.map(([key, label]) => (
+          <Pressable key={key} onPress={() => setFilter(key)} style={[styles.pill, filter === key && styles.pillOn]}
+            accessibilityRole="button" accessibilityState={{ selected: filter === key }}>
+            <Text style={styles.pillText}>{label}</Text>
+            <View style={[styles.badge, filter === key && styles.badgeOn]}>
+              <Text style={[styles.badgeText, filter === key && { color: t.text }]}>{count(key)}</Text>
+            </View>
+          </Pressable>
+        ))}
       </ScrollView>
 
-      <View style={styles.spread}>
-        <View style={styles.row}>
-          <Ionicons name="time-outline" size={14} color={t.muted} />
-          <Text style={styles.sorted}>Sorted by departure time (next out first)</Text>
-        </View>
-        <Text style={styles.pending}>{rightLabel}</Text>
+      <View style={styles.row}>
+        <Ionicons name="time-outline" size={14} color={t.muted} />
+        <Text style={styles.sorted}>Sorted by departure time (next out first)</Text>
       </View>
 
-      {mismatch && <LockedNotice />}
+      {error ? <Text style={styles.error} accessibilityRole="alert">{error}</Text> : null}
+      {trips === null && !error ? <Text style={styles.sorted}>Loading trips…</Text> : null}
+      {trips && !visible.length ? (
+        <View style={styles.card}><Text style={styles.cardTitle}>No trips</Text>
+          <Text style={styles.cardLine}>No published trips match this filter for today.</Text></View>
+      ) : null}
 
-      {/* Trips (locked and dimmed while mismatch is shown) */}
-      <View
-        pointerEvents={mismatch ? 'none' : 'auto'}
-        style={[{ gap: 14 }, mismatch && { opacity: 0.45 }]}
-      >
-        {visible.map((trip) => (
-          <TripCardView key={trip.id} trip={trip} offlineCopy={offline} />
-        ))}
-        <DispatchHorizonCard count={trips.length} before="05:00 AM" />
-      </View>
+      {visible.map((trip) => (
+        <Pressable key={trip.trip_id} onPress={() => open(trip)} accessibilityRole="button"
+          style={[styles.card, trip.trip_id === tripId && styles.cardSelected]}>
+          <View style={styles.spread}>
+            <Text style={styles.cardTitle}>Trip {trip.trip_number} · Vehicle {shortId(trip.vehicle_id)}</Text>
+            <Text style={[styles.status, trip.status === 'READY' && { color: t.green }]}>{TRIP_LABEL[trip.status as TripStatus]}</Text>
+          </View>
+          <Text style={styles.cardLine}>Departs {colomboTime(trip.departure_at)} · returns {colomboTime(trip.return_at)}</Text>
+          <Text style={styles.cardLine}>{trip.stop_count} stops · {trip.order_count} orders · driver {trip.driver_id ? 'assigned' : 'not assigned'}</Text>
+        </Pressable>
+      ))}
     </ScrollView>
   );
 }
@@ -149,7 +145,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 8,
   },
   pillOn: { borderColor: t.blue },
-  pillDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#60A5FA' },
   pillText: { fontSize: 14, fontWeight: '700', color: '#fff' },
   badge: {
     minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 6,
@@ -158,5 +153,10 @@ const styles = StyleSheet.create({
   badgeOn: { backgroundColor: '#fff' },
   badgeText: { fontSize: 11, fontWeight: '800', color: '#fff' },
   sorted: { fontSize: 12, color: t.muted },
-  pending: { fontSize: 13, fontWeight: '800', color: t.blue },
+  error: { fontSize: 14, color: t.red, fontWeight: '600' },
+  card: { backgroundColor: t.card, borderRadius: 16, borderWidth: 1, borderColor: t.border, padding: 14, gap: 4 },
+  cardSelected: { borderColor: t.blue, borderWidth: 2 },
+  cardTitle: { fontSize: 16, fontWeight: '800', color: t.text },
+  cardLine: { fontSize: 13, color: t.muted },
+  status: { fontSize: 12, fontWeight: '800', color: t.blue },
 });
