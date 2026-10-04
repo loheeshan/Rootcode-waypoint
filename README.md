@@ -45,10 +45,12 @@ van-only access and individual weight/volume limits. Candidate vehicles still
 need route, fuel and combined-load validation. The capacity-only CP-SAT engine now
 allocates whole orders within combined weight/volume limits and two trip slots per
 vehicle, with complete allocated/unallocated accounting. It has no HTTP endpoint
-yet and does not validate routes, fuel or published work. Optimization/result APIs
-and publishing remain pending; see the [planning guide](apps/api/app/planning/README.md)
+yet. The route scheduler now sequences those fixed groups against imported travel
+times, outlet windows, depot turnaround and supplied weekly fuel balances. An
+explicitly synthetic JSON example is included. Independent full-plan validation,
+optimization/result APIs and publishing remain pending; see the [planning guide](apps/api/app/planning/README.md)
 and [remaining backend batches](docs/process/COMMIT-PLAN.md#backend-delivery-queue-2026-10-04).
-Remaining business endpoints and domain tables, route optimization, competition dataset imports, POD capture, offline
+Remaining business endpoints and domain tables, integrated optimization APIs, competition dataset imports, POD capture, offline
 outbox processing and end-to-end workflows are **not implemented**. Public starter
 pages contain no real data. `scripts/seed.py --demo` delegates to the account seed;
 `scripts/validate-plan.py` remains a placeholder.

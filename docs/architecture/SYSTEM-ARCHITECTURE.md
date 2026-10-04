@@ -142,8 +142,18 @@ OR-Tools CP-SAT allocation: whole orders, combined weight/volume, compatibility,
 and at most two candidate trip slots per vehicle. It maximizes allocated order
 count then minimizes trips. The result includes every unallocated order and
 reports whether that capacity objective is proven optimal. It has no HTTP route
-or persistence yet. Route timing, fuel, existing operational trips and independent
-full-plan validation remain pending; capacity results cannot be published.
+or persistence yet; capacity results cannot be published.
+
+`route_inputs.py` imports explicit static travel/service/window/fuel snapshots.
+`routing.py` sequences those fixed capacity groups using CP-SAT circuits, including
+return legs, turnaround, full service within each window and rounded per-trip fuel
+against a shared weekly balance. It can swap the order of two trip groups. An
+approved synthetic example has explicit provenance and never changes database
+state. Infeasible groups require repair/reallocation in the future optimizer;
+they are not evidence that individual orders must be deferred. Authoritative
+usage/reservation loading, existing operational trip checks, independent full-plan
+validation, optimizer APIs and persistence remain pending. Scheduler results also
+keep `is_complete_plan_validation: false`.
 
 ## Published plan rule
 
