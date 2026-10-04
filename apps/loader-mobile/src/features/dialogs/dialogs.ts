@@ -1,21 +1,13 @@
+import type { DialogLine } from '../../components/ui/DialogCard';
+
 export type DialogId =
-  | 'scan'
-  | 'labelMatches'
-  | 'labelMismatch'
-  | 'reportVehicleIssue'
-  | 'vehicleIssueReported'
-  | 'saveSignoffOffline'
-  | 'acknowledgeIssue'
-  | 'shutterSeal'
-  | 'chilledSetpoint'
-  | 'cargoSecured'
-  | 'inspectionRequired'
-  | 'finishChecks'
-  | 'checkQuantity'
-  | 'revisionAcknowledged'
-  | 'stagingChange'
-  | 'finalStopLoaded'
-  | 'stop2Loaded';
+  | 'scan' | 'labelMatches' | 'labelMismatch' | 'reportVehicleIssue' | 'vehicleIssueReported'
+  | 'saveSignoffOffline' | 'acknowledgeIssue' | 'shutterSeal' | 'chilledSetpoint' | 'cargoSecured'
+  | 'inspectionRequired' | 'finishChecks' | 'checkQuantity' | 'revisionAcknowledged'
+  | 'stagingChange' | 'finalStopLoaded' | 'stop2Loaded'
+  | 'pin' | 'markReady' | 'reviewReport' | 'sentToDispatcher' | 'savedOffline'
+  | 'orderDetails' | 'dispatcherNotified' | 'shortageResolved' | 'trip2Complete'
+  | 'completeSixLines' | 'downloadingPlan';
 
 export type DialogAction = {
   key: string;
@@ -25,7 +17,13 @@ export type DialogAction = {
   next?: DialogId; // or open another dialog instead
 };
 
-export type DialogDef = { title: string; body: string[]; actions: DialogAction[] };
+export type DialogDef = {
+  title: string;
+  body: DialogLine[];
+  actions: DialogAction[];
+  custom?: 'pin'; // renders the PIN keypad inside the card
+  successHref?: string; // where the PIN keypad goes on success
+};
 
 const gate = (title: string, body: string): DialogDef => ({
   title,
@@ -37,6 +35,7 @@ const gate = (title: string, body: string): DialogDef => ({
 });
 
 export const dialogs: Record<DialogId, DialogDef> = {
+  /* ---------------- Earlier 17 ---------------- */
   scan: {
     title: 'Scan vehicle or order',
     body: ['Camera scanning is simulated here. Choose a sample label to demonstrate matching and mismatched items.'],
@@ -54,7 +53,6 @@ export const dialogs: Record<DialogId, DialogDef> = {
       { key: 'back', label: 'Return to checklist', variant: 'secondary', href: '/tabs/checklist' },
     ],
   },
-  // Not in the screenshots: written to complete the scan demo.
   labelMismatch: {
     title: 'Label belongs to VEH022',
     body: ['OUT044 was reassigned to VEH022 in plan rev 3. Do not load this item on VEH018.'],
@@ -82,9 +80,7 @@ export const dialogs: Record<DialogId, DialogDef> = {
   },
   saveSignoffOffline: {
     title: 'Save sign-off offline?',
-    body: [
-      'This records readiness only on this device. The driver is not notified or unlocked until the sign-off is synced.',
-    ],
+    body: ['This records readiness only on this device. The driver is not notified or unlocked until the sign-off is synced.'],
     actions: [
       { key: 'save', label: 'Save readiness locally', variant: 'primary', href: '/tabs/signoff-saved' },
       { key: 'keep', label: 'Keep reviewing', variant: 'secondary' },
@@ -99,10 +95,7 @@ export const dialogs: Record<DialogId, DialogDef> = {
     ],
   },
   shutterSeal: gate('Record shutter seal', 'Confirm the shutter is closed and tamper tag SL-99420 is intact.'),
-  chilledSetpoint: gate(
-    'Verify chilled set-point',
-    'The logger must show this trip’s required +4°C set-point. Check the cargo handling label.',
-  ),
+  chilledSetpoint: gate('Verify chilled set-point', 'The logger must show this trip’s required +4°C set-point. Check the cargo handling label.'),
   cargoSecured: gate('Cargo secured', 'Confirm straps, barriers and load bars are locked.'),
   inspectionRequired: {
     title: 'Inspection required',
@@ -129,9 +122,7 @@ export const dialogs: Record<DialogId, DialogDef> = {
   },
   stagingChange: {
     title: 'Plan rev 3 · staging change',
-    body: [
-      'ORD0092350 (OUT044) moved from VEH018 to VEH022. Remove the labelled staging unit from VEH018 and place it at Bay B-07. Other completed loading checks are kept.',
-    ],
+    body: ['ORD0092350 (OUT044) moved from VEH018 to VEH022. Remove the labelled staging unit from VEH018 and place it at Bay B-07. Other completed loading checks are kept.'],
     actions: [
       { key: 'confirm', label: 'Confirm staging unit removed', variant: 'primary', next: 'revisionAcknowledged' },
       { key: 'problem', label: 'Report removal problem', variant: 'secondary', href: '/tabs/report' },
@@ -152,5 +143,120 @@ export const dialogs: Record<DialogId, DialogDef> = {
       { key: 'confirm', label: 'Confirm 20 cartons loaded', variant: 'primary' },
       { key: 'problem', label: 'Report a problem', variant: 'secondary', href: '/tabs/report' },
     ],
+  },
+
+  /* ---------------- NEW: screen "Enter bay-lead PIN" ---------------- */
+  pin: {
+    title: 'Enter bay-lead PIN',
+    body: ['Use the demo PIN 0426 to continue. No account credentials are sent.'],
+    actions: [],
+    custom: 'pin',
+    successHref: '/tabs/today',
+  },
+
+  /* ---------------- NEW: screen "Mark VEH018 ready?" ---------------- */
+  markReady: {
+    title: 'Mark VEH018 ready?',
+    body: [
+      '7 orders processed · 3 inspection checks passed. The shortage remains on the signed manifest.',
+      { text: 'Issue acknowledgement required', tone: 'warn' },
+    ],
+    actions: [
+      { key: 'confirm', label: 'Confirm ready to depart', variant: 'primary', href: '/tabs/vehicle-ready' },
+      { key: 'back', label: 'Back to readiness', variant: 'secondary' },
+    ],
+  },
+
+  /* ---------------- NEW: screen "Review problem report" ---------------- */
+  // The Report screen fills in the lines below with the real selections.
+  reviewReport: {
+    title: 'Review problem report',
+    body: [
+      { text: 'ORD0092322 · OUT027 · Milk 1L', tone: 'heading' },
+      { text: 'Quantity Short · available 8 of 10', tone: 'dark' },
+      { text: 'Hold vehicle — needs dispatcher', tone: 'dark' },
+      { text: 'Bay 4 photo attached · 03:12', tone: 'dark' },
+      { text: '2 crates damaged in Bay 4', tone: 'dark' },
+      { text: 'Capture time: 03:12 · Bay B-04', tone: 'small' },
+    ],
+    actions: [
+      { key: 'send', label: 'Send report', variant: 'primary' },
+      { key: 'edit', label: 'Edit report', variant: 'secondary' },
+    ],
+  },
+
+  /* ---------------- NEW: screen "Sent to dispatcher · 03:12" ---------------- */
+  sentToDispatcher: {
+    title: 'Sent to dispatcher · 03:12',
+    body: [
+      'The report is attached to the order. Your selected urgency is included.',
+      { text: 'Hold vehicle — needs dispatcher', tone: 'strong' },
+    ],
+    actions: [
+      { key: 'status', label: 'View dispatcher status', variant: 'primary', href: '/tabs/dispatcher-pending' },
+      { key: 'continue', label: 'Continue checklist', variant: 'secondary', href: '/tabs/checklist' },
+    ],
+  },
+
+  /* ---------------- NEW: screen "Saved on this device · 03:12" ---------------- */
+  savedOffline: {
+    title: 'Saved on this device · 03:12',
+    body: [
+      'The dispatcher has not received this report yet. It will send when the connection returns.',
+      { text: 'Hold vehicle — needs dispatcher', tone: 'strong' },
+    ],
+    actions: [
+      { key: 'continue', label: 'Continue offline loading', variant: 'primary', href: '/tabs/checklist' },
+      { key: 'queue', label: 'View sync queue', variant: 'secondary', href: '/tabs/sync-queue' },
+    ],
+  },
+
+  /* ---------------- NEW: screen "Order and loading details" ---------------- */
+  // The Checklist screen fills in the order and quantities.
+  orderDetails: {
+    title: 'Order and loading details',
+    body: [
+      { text: 'OUT081 · Stop 7', tone: 'heading' },
+      { text: '18 cartons · chilled 4°C · loaded deepest', tone: 'dark' },
+    ],
+    actions: [
+      { key: 'report', label: 'Report problem on this order', variant: 'primary', href: '/tabs/report' },
+      { key: 'back', label: 'Return to checklist', variant: 'secondary' },
+    ],
+  },
+
+  /* ---------------- NEW: screen "Dispatcher notified" ---------------- */
+  dispatcherNotified: {
+    title: 'Dispatcher notified',
+    body: ['VEH031’s two missing items remain an open issue. Captured at 03:18 · staging zone C-12.'],
+    actions: [{ key: 'back', label: 'Return to issue', variant: 'primary' }],
+  },
+
+  /* ---------------- NEW: screen "Staging shortage resolved" ---------------- */
+  shortageResolved: {
+    title: 'Staging shortage resolved',
+    body: ['Both items were found and checked against VEH031’s manifest. The issue history is retained.'],
+    actions: [{ key: 'back', label: 'Back to Tech trips', variant: 'primary', href: '/tabs/today?filter=Tech' }],
+  },
+
+  /* ---------------- NEW: screen "VEH022 loading complete" ---------------- */
+  trip2Complete: {
+    title: 'VEH022 loading complete',
+    body: ['6 of 6 orders checked. This trip is ready for the bay lead’s physical inspection and handoff.'],
+    actions: [{ key: 'back', label: 'Back to today’s loading', variant: 'primary', href: '/tabs/today' }],
+  },
+
+  /* ---------------- NEW: screen "Complete all six loading lines" ---------------- */
+  completeSixLines: {
+    title: 'Complete all six loading lines',
+    body: ['Tick each order after loading it. Keep reverse stop order and verify the reassigned staging unit.'],
+    actions: [{ key: 'back', label: 'Return to VEH022 checklist', variant: 'primary' }],
+  },
+
+  /* ---------------- NEW: screen "Downloading latest plan…" ---------------- */
+  downloadingPlan: {
+    title: 'Downloading latest plan…',
+    body: ['Checking the current depot and plan revision before enabling loading.'],
+    actions: [],
   },
 };

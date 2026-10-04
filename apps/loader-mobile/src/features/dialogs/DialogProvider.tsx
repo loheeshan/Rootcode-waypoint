@@ -1,11 +1,17 @@
 import { useRouter } from 'expo-router';
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
 
-import { DialogCard } from '../../components/ui/DialogCard';
+import { DialogCard, type DialogLine } from '../../components/ui/DialogCard';
+import { PinPad } from '../../components/ui/PinPad';
 import { dialogs, type DialogDef, type DialogId } from './dialogs';
 
 type OnAction = (key: string) => void;
-type Ctx = { openDialog: (id: DialogId, onAction?: OnAction) => void; closeDialog: () => void };
+type Override = { title?: string; body?: DialogLine[] };
+type Ctx = {
+  /** Open a dialog. `override` replaces its title/body text for this one time. */
+  openDialog: (id: DialogId, onAction?: OnAction, override?: Override) => void;
+  closeDialog: () => void;
+};
 
 const DialogContext = createContext<Ctx | null>(null);
 
@@ -17,13 +23,13 @@ export function useDialog() {
 
 export function DialogProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const [current, setCurrent] = useState<DialogId | null>(null);
+  const [current, setCurrent] = useState<{ id: DialogId; override?: Override } | null>(null);
   const handler = useRef<OnAction | undefined>(undefined);
   const lastDef = useRef<DialogDef | null>(null);
 
-  const openDialog = useCallback((id: DialogId, onAction?: OnAction) => {
+  const openDialog = useCallback((id: DialogId, onAction?: OnAction, override?: Override) => {
     handler.current = onAction;
-    setCurrent(id);
+    setCurrent({ id, override });
   }, []);
 
   const closeDialog = useCallback(() => {
@@ -33,7 +39,8 @@ export function DialogProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(() => ({ openDialog, closeDialog }), [openDialog, closeDialog]);
 
-  const def = current ? dialogs[current] : null;
+  const base = current ? dialogs[current.id] : null;
+  const def: DialogDef | null = base ? { ...base, ...current?.override } : null;
   if (def) lastDef.current = def;
   const shown = def ?? lastDef.current;
 
@@ -42,14 +49,22 @@ export function DialogProvider({ children }: { children: ReactNode }) {
     const action = def.actions.find((a) => a.key === key);
     const cb = handler.current;
     handler.current = undefined;
-    cb?.(key);
 
     if (action?.next) {
-      setCurrent(action.next);
+      setCurrent({ id: action.next });
     } else {
       setCurrent(null);
       if (action?.href) router.navigate(action.href as never);
     }
+    cb?.(key); // runs last, so it can open another dialog
+  };
+
+  const onPinSuccess = () => {
+    const cb = handler.current;
+    handler.current = undefined;
+    setCurrent(null);
+    if (def?.successHref) router.navigate(def.successHref as never);
+    cb?.('success');
   };
 
   return (
@@ -62,7 +77,9 @@ export function DialogProvider({ children }: { children: ReactNode }) {
         actions={shown?.actions ?? []}
         onAction={onAction}
         onClose={closeDialog}
-      />
+      >
+        {shown?.custom === 'pin' ? <PinPad onSuccess={onPinSuccess} /> : null}
+      </DialogCard>
     </DialogContext.Provider>
   );
 }

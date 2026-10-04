@@ -52,11 +52,11 @@ export default function DepartScreen() {
       if (key === 'failed') setStatus((s) => ({ ...s, [g.key]: 'fail' }));
     });
 
-  const release = () => {
+    const release = () => {
     if (!acknowledged) return openDialog('finishChecks');
     if (!allPassed) return openDialog('inspectionRequired');
     if (offline) return openDialog('saveSignoffOffline');
-    router.navigate('/tabs/vehicle-ready' as never);
+    openDialog('markReady');
   };
 
   return (
