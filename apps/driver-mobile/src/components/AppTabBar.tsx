@@ -36,6 +36,7 @@ const STOPS_CHILDREN = [
 ];
 const SYNC_CHILDREN = ["sync-complete", "route-conflict", "photo-attention"];
 const TODAY_CHILDREN = ["today-reefer-fault"];
+const PROFILE_CHILDREN = ["app-settings"];
 
 export function AppTabBar({ state, navigation }: TabBarProps) {
   const insets = useSafeAreaInsets();
@@ -53,6 +54,7 @@ export function AppTabBar({ state, navigation }: TabBarProps) {
           (route.name === "stops" && STOPS_CHILDREN.includes(activeName));
           (route.name === "sync" && SYNC_CHILDREN.includes(activeName));
           (route.name === "today" && TODAY_CHILDREN.includes(activeName));
+          (route.name === "profile" && PROFILE_CHILDREN.includes(activeName));
         const onPress = () => {
           const event = navigation.emit({
             type: "tabPress",
