@@ -2,21 +2,18 @@
 import type { ReactNode } from "react";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
-import type { GoFn, SetFn, State } from "../data/mock";
+import type { GoFn } from "../data/store";
 
 /* One layout for every signed-in page: sidebar + header + content */
-export default function AppShell({ route, go, S, set, unread, children }: { route: string; go: GoFn; S: State; set: SetFn; unread: number; children: ReactNode }) {
+export default function AppShell({ route, go, context, email, children }: {
+  route: string; go: GoFn; context: string; email: string; children: ReactNode;
+}) {
   return (
     <div id="app">
-      <Sidebar route={route} go={go} S={S} set={set} />
+      <Sidebar route={route} go={go} context={context} />
       <main>
-        <Header off={S.off} unread={unread} go={go} />
-        <div className="pg">
-          {S.off && (
-            <div className="al w"><b>You are offline</b>Last saved orders and your draft remain available on this device. Last synced 06:12 — data may be stale.</div>
-          )}
-          {children}
-        </div>
+        <Header go={go} email={email} />
+        <div className="pg">{children}</div>
       </main>
     </div>
   );

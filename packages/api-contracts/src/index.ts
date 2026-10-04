@@ -561,7 +561,22 @@ export interface AuditListResponse {
   offset: number;
 }
 export class ApiError extends Error {
-  constructor(public readonly status: number, message: string) { super(message); this.name = 'ApiError'; }
+  /** `detail` is the parsed error body field: a message string or FastAPI's validation list. */
+  constructor(public readonly status: number, message: string, public readonly detail?: unknown) {
+    super(message); this.name = 'ApiError';
+  }
+}
+/** A short, user-facing message from an API error detail, without echoing request values. */
+export function errorMessage(error: unknown, fallback = 'Something went wrong. Try again.'): string {
+  if (!(error instanceof ApiError)) return fallback;
+  const { detail } = error;
+  if (typeof detail === 'string' && detail.trim()) return detail;
+  if (Array.isArray(detail) && detail.length) {
+    const first = detail[0] as { loc?: unknown[]; msg?: string };
+    const field = Array.isArray(first.loc) ? String(first.loc[first.loc.length - 1] ?? '') : '';
+    return [field.replace(/_/g, ' '), first.msg].filter(Boolean).join(': ');
+  }
+  return fallback;
 }
 export interface ApiResponse<T> {
   data: T;
@@ -611,7 +626,10 @@ export function createApiClient(baseUrl: string, getToken?: () => Promise<string
     if (token) headers.set('Authorization', 'Bearer ' + token);
     if (typeof init.body === 'string' && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
     const response = await fetch(base + path, { ...init, headers });
-    if (!response.ok) throw new ApiError(response.status, 'API request failed (' + response.status + ')');
+    if (!response.ok) {
+      const body = await response.json().catch(() => null) as { detail?: unknown } | null;
+      throw new ApiError(response.status, 'API request failed (' + response.status + ')', body?.detail);
+    }
     const data = response.status === 204 ? undefined as T : await response.json() as T;
     return { data, status: response.status, etag: response.headers.get('ETag'), location: response.headers.get('Location') };
   }

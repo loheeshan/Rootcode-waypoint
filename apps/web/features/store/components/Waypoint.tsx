@@ -1,209 +1,240 @@
 "use client";
-import { useEffect, useState } from "react";
-import type { ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { FormEvent, ReactNode } from "react";
+import {
+  ApiError, errorMessage, signInMessages,
+  type AuthUser, type OrderCreateResponse, type OrderResponse, type OrderStatus,
+} from "@waypoint/api-contracts";
 import AppShell from "./AppShell";
 import Auth from "./Auth";
 import Track from "./Track";
 import Receipt from "./Receipt";
-import IssueModal from "./IssueModal";
-import { Alert, Kv, Empty, OrderCard, Modal } from "./ui";
-import { P, DEF, init, totals, lineList } from "../data/mock";
-import type { State, SetFn, GoFn, PatchFn, Issue } from "../data/mock";
-import { signInMessages, type AuthUser } from "@waypoint/api-contracts";
+import { Alert, Empty, Kv, LoadError, Loading, Modal, OrderCard, useLoad } from "./ui";
+import {
+  IN_PROGRESS, STATUS_LABEL, STATUSES, countByStatus, createOrder, formatDate, listOrders,
+  shortId, suggestedDeliveryDate, validQuantity,
+} from "../data/store";
+import type { GoFn } from "../data/store";
 import { currentSession, webSignOut } from "@/lib/auth-client";
 
+const PAGE = 20;
+type Draft = { outlet: string; temperature: "ambient" | "chilled"; weight: string; volume: string; date: string };
+
 export default function Waypoint() {
-  const [S, setS] = useState<State>(init);
-  const set: SetFn = (p) => setS((s) => ({ ...s, ...(typeof p === "function" ? p(s) : p) }));
-  const [, setUser] = useState<AuthUser | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [checking, setChecking] = useState(true);
+  const [expired, setExpired] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [route, setRoute] = useState("home");
+  const [id, setId] = useState<string | null>(null);
+  const go: GoFn = useCallback((r, next = null) => { setRoute(r); setId(next); }, []);
 
   // The server session (httpOnly cookie) decides whether the user is signed in, also on reload.
   useEffect(() => {
     let active = true;
     currentSession("STORE_MANAGER").then((result) => {
       if (!active) return;
-      if (result.status === "signed-in") {
-        setUser(result.user);
-        setS((s) => ({ ...s, signed: true, expired: false }));
-      } else if (result.status === "expired") {
-        setS((s) => ({ ...s, signed: false, expired: true }));
-      } else if (result.status !== "signed-out") {
-        setNotice(signInMessages[result.status]);
-      }
+      if (result.status === "signed-in") setUser(result.user);
+      else if (result.status === "expired") setExpired(true);
+      else if (result.status !== "signed-out") setNotice(signInMessages[result.status]);
       setChecking(false);
     });
     return () => { active = false; };
   }, []);
 
+  const onExpired = useCallback(() => { setUser(null); setExpired(true); }, []);
   const signOut = async () => {
     await webSignOut();
     setUser(null);
+    setExpired(false);
     setNotice(null);
-    set({ signed: false, expired: false });
+    go("home");
   };
-  const go: GoFn = (route, id = null) => set({ route, id, modal: null, err: null });
-  const patch: PatchFn = (id, f) => set((s) => ({ orders: s.orders.map((o) => (o.id === id ? { ...o, ...(typeof f === "function" ? f(o) : f) } : o)) }));
-  const date = S.late ? "Wednesday 30 September" : "Tuesday 29 September";
-  const clock = S.late ? "16:20" : "15:42";
-  const t = totals(S.q);
-  const order = S.orders.find((o) => o.id === S.id);
 
   if (checking) return <div style={{ width: "100%" }}><div className="sig card"><p className="m">Checking your session…</p></div></div>;
-  if (!S.signed) return <Auth S={S} set={set} notice={notice} onSignedIn={(user) => { setUser(user); setNotice(null); }} />;
+  if (!user) {
+    return <Auth expired={expired} notice={notice} onSignedIn={(signedIn) => {
+      setUser(signedIn); setExpired(false); setNotice(null); go("home");
+    }} />;
+  }
 
-  const setQ = (k: string, n: number) => set((s) => ({ qerr: n > 99, q: { ...s.q, [k]: Math.min(99, Math.max(0, n)) } }));
-
-  const submitOrder = () => {
-    if (S.off || S.fail) return set({ fail: false, err: "order" });
-    const ls = lineList(S.q);
-    const ids: string[][] = [];
-    if (ls.some((l) => l[0] === "dry")) ids.push(["ORD0092316", "Dry"]);
-    if (ls.some((l) => l[0] === "chilled")) ids.push(["ORD0092317", "Chilled"]);
-    set((s) => ({
-      orders: [...ids.map((i) => ({ id: i[0], st: "Active", ty: "Fresh · " + (i[1] === "Dry" ? "Dry / ambient" : "Chilled"), info: "Confirmed · ETA pending", stage: 1 })), ...s.orders],
-      sent: { ids, t, d: date }, q: {}, err: null, modal: null, route: "received",
-    }));
-  };
-
-  const submitReceipt = () => {
-    if (!order) return;
-    if (S.off || S.fail) return set({ fail: false, err: "receipt" });
-    const lines = order.lines || DEF;
-    const issues = lines.filter((l) => l.m && l.m !== "ok").map((l) => l.m as Issue);
-    patch(order.id, { issues, done: true, ct: "06:42", stage: 6, st: "Delivered", info: issues.length ? "Receipt confirmed · issue reported" : "Receipt confirmed" });
-    set((s) => ({ err: null, notes: s.notes.map((n) => (n.o === order.id ? { ...n, u: 0 } : n)) }));
-  };
-
-  const banner = S.late
-    ? <Alert k="w" t="The cutoff has passed">Orders placed now are scheduled for the next applicable delivery date, Wednesday. You must accept it before submitting.</Alert>
-    : <Alert t="Cutoff 16:00 · Asia/Colombo">Order before 16:00 for delivery on Tuesday 29 September.</Alert>;
-
-  const unread = S.notes.filter((n) => n.u).length;
-
-  /* ----- views ----- */
+  const outlets = user.outlet_ids;
+  const context = outlets.length === 1 ? `Outlet ${shortId(outlets[0])}` : `${outlets.length} outlets`;
   let view: ReactNode;
-  const r = S.route;
-  if (r === "home") {
-    const c = (st: string) => S.orders.filter((o) => o.st === st).length;
-    view = (<>
-      <h1>Hello, Chamari</h1><p className="sub">OUT017 · Fresh · Colombo 03</p>{banner}
-      <div className="g g4">{["Active", "Needs action", "Deferred", "Delivered"].map((x) => <div className="card" key={x}><div className="m">{x}</div><h1>{c(x)}</h1></div>)}</div>
-      <div className="row"><button className="p" onClick={() => go("new")}>New order</button><button onClick={() => go("orders")}>My orders</button></div>
-      <h2 style={{ marginTop: 18 }}>Receiving plan</h2>
-      {S.orders.filter((o) => o.st !== "Delivered").map((o) => <OrderCard key={o.id} o={o} go={go} />)}
-    </>);
-  } else if (r === "orders" || r === "history") {
-    const q = S.search.toLowerCase();
-    let L = S.orders;
-    if (r === "orders" && S.filter !== "All") L = L.filter((o) => o.st === S.filter);
-    if (q) L = L.filter((o) => {
-      const prods = o.ty.includes("Dry") ? "basmati rice sunflower oil salt" : "highland milk anchor butter curd";
-      return o.id.toLowerCase().includes(q) || prods.includes(q);
-    });
-    view = S.loadFail ? (
-      <div className="es"><h2>We couldn't load orders</h2><p className="m">Your existing orders remain safe.</p>
-        <div className="row" style={{ justifyContent: "center" }}><button className="p" onClick={() => set({ loadFail: false })}>Try again</button><button onClick={() => go("support")}>Contact support</button></div></div>
-    ) : (<>
-      <h1>{r === "orders" ? "My orders" : "Order history"}</h1><p className="sub">Search by order ID or product</p>
-      <div className="row" style={{ marginBottom: 14 }}>
-        <div style={{ flex: 1 }}><input type="text" aria-label="Search" placeholder="Search ORD0092314 or Basmati rice" value={S.search} onChange={(e) => set({ search: e.target.value })} /></div>
-        <button onClick={() => go(r === "orders" ? "history" : "orders")}>{r === "orders" ? "History" : "Active orders"}</button>
-      </div>
-      {r === "orders" && <div className="tab">{["All", "Active", "Needs action", "Deferred", "Delivered"].map((f) => <button key={f} className={S.filter === f ? "on" : ""} onClick={() => set({ filter: f })}>{f}</button>)}</div>}
-      {L.length ? L.map((o) => <OrderCard key={o.id} o={o} go={go} />)
-        : S.orders.length ? <Empty t="No results found" d="Try a different order ID or product." btn="Clear search" onClick={() => set({ search: "", filter: "All" })} />
-        : <Empty t="No orders yet" d="" btn="Create your first order" onClick={() => go("new")} />}
-    </>);
-  } else if (r === "new") {
-    view = (<>
-      <h1>New order</h1><p className="sub">OUT017 · Fresh · Colombo 03</p>{banner}
-      <div className="tab">{[["dry", "Dry / ambient"], ["chilled", "Chilled"]].map(([k, l]) => <button key={k} className={S.stream === k ? "on" : ""} onClick={() => set({ stream: k })}>{l}</button>)}</div>
-      <div className="g g2">
-        <div className="card"><h2>Products</h2>
-          {P[S.stream].map((p) => (
-            <div className="pr" key={p[0]}>
-              <div><b>{p[1]}</b><div className="m">SKU {p[0]} · {p[2]} kg · {p[3]} m³ per unit</div></div>
-              <div className="q">
-                <button aria-label="Decrease" onClick={() => setQ(p[0], (S.q[p[0]] || 0) - 1)}>−</button>
-                <input type="text" inputMode="numeric" aria-label={`Quantity ${p[1]}`} value={S.q[p[0]] || 0}
-                  onChange={(e) => /^\d*$/.test(e.target.value) && setQ(p[0], +e.target.value)} />
-                <button aria-label="Increase" onClick={() => setQ(p[0], (S.q[p[0]] || 0) + 1)}>+</button>
-              </div>
-            </div>
-          ))}
-          {S.qerr && <Alert k="e" t="Quantity limit reached">Maximum 99 units per line.</Alert>}
-        </div>
-        <div className="card"><h2>Order summary</h2>
-          <Kv a="Total units" b={t.u} /><Kv a="Total weight" b={`${t.w} kg`} /><Kv a="Total volume" b={`${t.v} m³`} /><Kv a="Delivery" b={date} />
-          <button className="p" style={{ width: "100%", marginTop: 10 }} onClick={() => set({ err: null, modal: t.u ? "review" : "empty" })}>Review order</button>
-        </div>
-      </div>
-      <button className="d" onClick={() => set({ q: {} })}>Clear order</button>
-    </>);
-  } else if (r === "received" && S.sent) {
-    const x = S.sent;
-    view = (<>
-      <Alert k="s" t="Order received">Your delivery request has been received.</Alert>
-      <div className="card"><h2>Fresh order request</h2>{x.ids.map((i) => <Kv key={i[0]} a={i[0]} b={i[1]} />)}
-        <Kv a="Units" b={x.t.u} /><Kv a="Weight" b={`${x.t.w} kg`} /><Kv a="Volume" b={`${x.t.v} m³`} /><Kv a="Delivery" b={x.d} /></div>
-      <Alert t="ETA depends on the route plan">Confirmation does not guarantee vehicle capacity, priority or final route assignment.</Alert>
-      <button className="p" onClick={() => go("orders")}>Track orders</button> <button onClick={() => go("new")}>New order</button>
-    </>);
-  } else if (r === "order" && order) {
-    view = <Track o={order} go={go} patch={patch} />;
-  } else if (r === "receipt" && order) {
-    view = <Receipt o={order} S={S} set={set} go={go} patch={patch} submit={submitReceipt} />;
-  } else if (r === "deliv" || r === "receipts") {
-    view = (<><h1>{r === "deliv" ? "Deliveries" : "Receipts"}</h1>
-      {S.orders.filter((o) => (r === "deliv" ? o.st !== "Delivered" : o.stage >= 5)).map((o) => <OrderCard key={o.id} o={o} go={go} />)}</>);
-  } else if (r === "notif") {
-    view = (<><h1>Notifications</h1><p className="sub">Updates for OUT017 · Fresh</p>
-      {S.notes.map((n, i) => (
-        <div className={`card ${n.u ? "un" : ""}`} key={i}><div className="row sp">
-          <div><b>{n.t}</b><div className="m">{n.d}</div></div>
-          <div className="row">
-            {n.o && <button onClick={() => { set((s) => ({ notes: s.notes.map((x, j) => (j === i ? { ...x, u: 0 } : x)) })); go("order", n.o); }}>Open</button>}
-            {n.u ? <button onClick={() => set((s) => ({ notes: s.notes.map((x, j) => (j === i ? { ...x, u: 0 } : x)) }))}>Mark read</button> : null}
-          </div></div></div>
-      ))}</>);
-  } else if (r === "support") {
-    view = (<><h1>Support</h1><div className="card"><h2>Central logistics desk</h2><Kv a="Extension" b="402" /><Kv a="Outlet" b="OUT017 · Colombo 03" /></div></>);
-  } else if (r === "settings") {
+  if (!outlets.length) view = <Empty t="No outlet assigned" d="Ask an administrator to assign your outlet before placing orders." />;
+  else if (route === "home") view = <Home user={user} go={go} onExpired={onExpired} />;
+  else if (route === "orders") view = <Orders go={go} onExpired={onExpired} />;
+  else if (route === "new") view = <NewOrder outlets={outlets} go={go} onExpired={onExpired} />;
+  else if (route === "order" && id) view = <Track key={id} id={id} go={go} onExpired={onExpired} />;
+  else if (route === "receipt" && id) view = <Receipt key={id} id={id} go={go} onExpired={onExpired} />;
+  else if (route === "deliv") view = <StatusGroups title="Deliveries" statuses={["PLANNED", "LOADING", "OUT_FOR_DELIVERY"]} go={go} onExpired={onExpired} empty="No deliveries are planned or on the way." />;
+  else if (route === "receipts") view = <StatusGroups title="Receipts" statuses={["DELIVERED", "RECEIPT_CONFIRMED"]} go={go} onExpired={onExpired} empty="No delivered orders yet." />;
+  else if (route === "notif") view = <><h1>Notifications</h1><Empty t="Notifications are not available yet" d="Check order status on the Orders page." btn="My orders" onClick={() => go("orders")} /></>;
+  else if (route === "support") view = <><h1>Support</h1><div className="card"><h2>Central logistics desk</h2><p className="m">For delivery questions, deferrals or receipt problems, contact your dispatcher.</p></div></>;
+  else if (route === "settings") {
     view = (<><h1>Settings</h1>
-      <div className="card"><h2>My profile</h2><Kv a="Name" b="Chamari" /><Kv a="Outlet" b="OUT017 · Fresh · Colombo 03" /></div>
-      <div className="card"><h2>Notifications</h2>{["Delivery ETA updates", "Delivery moved", "Receipt reminders"].map((x) => <label className="kv" key={x}><span>{x}</span><input type="checkbox" defaultChecked /></label>)}</div>
+      <div className="card"><h2>My profile</h2><Kv a="Email" b={user.email} /><Kv a="Role" b="Store Manager" />
+        <Kv a="Outlets" b={outlets.map(shortId).join(", ")} /></div>
       <button className="d" onClick={signOut}>Sign out</button></>);
-  } else if (r === "daily") {
-    view = (<><h1>Daily replenishment</h1><p className="sub">Fresh outlet · order before 16:00 each day.</p>
-      <div className="card">Dry / ambient and Chilled are placed through one flow and handled as separate logistics orders.<br /><br /><button className="p" onClick={() => go("new")}>Start today's order</button></div></>);
+  } else if (route === "daily") {
+    view = (<><h1>Daily replenishment</h1><p className="sub">Order before 16:00 Colombo time for next-day delivery.</p>
+      <div className="card">Dry / ambient and chilled consignments are separate orders, each with its own weight and volume.<br /><br /><button className="p" onClick={() => go("new")}>Start an order</button></div></>);
   } else view = <Empty t="Not found" d="" btn="Home" onClick={() => go("home")} />;
 
-  /* ----- modals ----- */
-  let modal: ReactNode = null;
-  if (S.modal === "empty") modal = (<Modal onClose={() => set({ modal: null })}><h2>Add at least one item</h2><p>An empty order can't be submitted. Enter a quantity for at least one product.</p><button className="p" onClick={() => set({ modal: null })}>OK</button></Modal>);
-  if (S.modal === "review") modal = (
-    <Modal onClose={() => set({ modal: null })}>
-      <h2>Review your order</h2>
-      <Alert k={S.late ? "w" : "i"} t={`Cutoff checked: ${clock}`}>{S.late ? "After 16:00 — new date must be accepted." : "Before 16:00"}</Alert>
-      <Kv a="Outlet" b="OUT017 · Fresh" />
-      <Kv a="Streams" b={[...new Set(lineList(S.q).map((l) => (l[0] === "dry" ? "Dry / ambient" : "Chilled")))].join(" + ")} />
-      {lineList(S.q).map((l) => <Kv key={l[1][0]} a={l[1][1]} b={`× ${l[2]}`} />)}
-      <Kv a="Delivery" b={date} /><Kv a="Units / weight / volume" b={`${t.u} · ${t.w} kg · ${t.v} m³`} />
-      {S.err === "order" && <Alert k="e" t="Order not submitted">Connection interrupted. Your draft is saved.</Alert>}
-      <div className="row" style={{ marginTop: 12 }}>
-        <button className="p" onClick={submitOrder}>{S.err === "order" ? "Retry" : S.late ? "Accept date & submit" : "Submit order"}</button>
-        <button onClick={() => set({ modal: null })}>Back to edit</button>
-      </div>
-    </Modal>
-  );
-  if (S.modal === "issue" && order && S.cur) modal = <IssueModal S={S} set={set} patch={patch} order={order} />;
+  return <AppShell route={route} go={go} context={context} email={user.email}>{view}</AppShell>;
+}
 
-  return (
-    <AppShell route={r} go={go} S={S} set={set} unread={unread}>
-      {view}
-      {modal}
-    </AppShell>
+type ViewProps = { go: GoFn; onExpired: () => void };
+
+function Home({ user, go, onExpired }: ViewProps & { user: AuthUser }) {
+  const counts = useLoad(countByStatus, onExpired);
+  const recent = useLoad(() => listOrders({ limit: PAGE }), onExpired);
+  const sum = (statuses: OrderStatus[]) => statuses.reduce((n, s) => n + (counts.data?.[s] ?? 0), 0);
+  const tiles: [string, OrderStatus[]][] = [
+    ["In progress", IN_PROGRESS], ["Needs receipt", ["DELIVERED"]], ["Deferred", ["DEFERRED"]], ["Receipt confirmed", ["RECEIPT_CONFIRMED"]],
+  ];
+  const open = (recent.data?.items ?? []).filter((o) => o.status !== "RECEIPT_CONFIRMED");
+  return (<>
+    <h1>Hello</h1><p className="sub">{user.email}</p>
+    <Alert t="Cutoff 16:00 · Asia/Colombo">Orders placed before 16:00 can be delivered the next day; later orders move to the following day.</Alert>
+    {counts.error ? <LoadError error={counts.error} retry={counts.reload} /> : (
+      <div className="g g4">{tiles.map(([label, statuses]) => (
+        <div className="card" key={label}><div className="m">{label}</div><h1>{counts.loading ? "…" : sum(statuses)}</h1></div>
+      ))}</div>
+    )}
+    <div className="row"><button className="p" onClick={() => go("new")}>New order</button><button onClick={() => go("orders")}>My orders</button></div>
+    <h2 style={{ marginTop: 18 }}>Receiving plan</h2>
+    {recent.loading ? <Loading /> : recent.error ? <LoadError error={recent.error} retry={recent.reload} />
+      : open.length ? open.map((o) => <OrderCard key={o.id} o={o} go={go} />)
+        : <Empty t="Nothing to receive" d="Orders you place will appear here." btn="Create an order" onClick={() => go("new")} />}
+  </>);
+}
+
+function Orders({ go, onExpired }: ViewProps) {
+  const [status, setStatus] = useState<OrderStatus | "ALL">("ALL");
+  const [page, setPage] = useState(0);
+  const [search, setSearch] = useState("");
+  const list = useLoad(
+    () => listOrders({ status: status === "ALL" ? undefined : status, limit: PAGE, offset: page * PAGE }),
+    onExpired, `${status}:${page}`,
   );
+  const q = search.trim().toLowerCase();
+  const items = (list.data?.items ?? []).filter((o) => !q || o.id.toLowerCase().startsWith(q));
+  const total = list.data?.total ?? 0;
+  return (<>
+    <h1>My orders</h1><p className="sub">Newest first · search this page by order ID</p>
+    <div className="row" style={{ marginBottom: 14 }}>
+      <div style={{ flex: 1 }}><input type="text" aria-label="Search by order ID" placeholder="Order ID, e.g. 3F2A9C1D" value={search} onChange={(e) => setSearch(e.target.value)} /></div>
+      <button onClick={list.reload} disabled={list.loading}>Refresh</button>
+    </div>
+    <div className="tab">{(["ALL", ...STATUSES] as const).map((s) => (
+      <button key={s} className={status === s ? "on" : ""} onClick={() => { setStatus(s); setPage(0); }}>{s === "ALL" ? "All" : STATUS_LABEL[s]}</button>
+    ))}</div>
+    {list.loading ? <Loading t="Loading orders…" /> : list.error ? <LoadError error={list.error} retry={list.reload} />
+      : items.length ? items.map((o) => <OrderCard key={o.id} o={o} go={go} />)
+        : total ? <Empty t="No results on this page" d="Try a different order ID or clear the search." btn="Clear search" onClick={() => setSearch("")} />
+          : status === "ALL" ? <Empty t="No orders yet" d="" btn="Create your first order" onClick={() => go("new")} />
+            : <Empty t={`No ${STATUS_LABEL[status].toLowerCase()} orders`} d="" btn="Show all" onClick={() => setStatus("ALL")} />}
+    {total > PAGE && (
+      <div className="row" style={{ marginTop: 12 }}>
+        <button disabled={page === 0 || list.loading} onClick={() => setPage((p) => p - 1)}>‹ Newer</button>
+        <span className="m">Page {page + 1} of {Math.ceil(total / PAGE)}</span>
+        <button disabled={(page + 1) * PAGE >= total || list.loading} onClick={() => setPage((p) => p + 1)}>Older ›</button>
+      </div>
+    )}
+  </>);
+}
+
+function StatusGroups({ title, statuses, go, onExpired, empty }: ViewProps & { title: string; statuses: OrderStatus[]; empty: string }) {
+  const lists = useLoad(() => Promise.all(statuses.map((status) => listOrders({ status, limit: 50 }))), onExpired, statuses.join());
+  if (lists.loading) return <><h1>{title}</h1><Loading /></>;
+  if (lists.error || !lists.data) return <><h1>{title}</h1><LoadError error={lists.error} retry={lists.reload} /></>;
+  const groups = lists.data;
+  return (<><h1>{title}</h1>
+    {groups.every((g) => !g.items.length) ? <Empty t="Nothing here" d={empty} /> : statuses.map((status, i) => groups[i].items.length ? (
+      <div key={status}><h2 style={{ marginTop: 14 }}>{STATUS_LABEL[status]} ({groups[i].total})</h2>
+        {groups[i].items.map((o: OrderResponse) => <OrderCard key={o.id} o={o} go={go} />)}</div>
+    ) : null)}
+  </>);
+}
+
+function NewOrder({ outlets, go, onExpired }: ViewProps & { outlets: string[] }) {
+  const [draft, setDraft] = useState<Draft>({ outlet: outlets[0], temperature: "ambient", weight: "", volume: "", date: suggestedDeliveryDate() });
+  const [review, setReview] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState<OrderCreateResponse | null>(null);
+  // Synchronous lock: creation is not idempotent, so a second click must never send again.
+  const sending = useRef(false);
+  const update = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
+  const valid = validQuantity(draft.weight) && validQuantity(draft.volume) && !!draft.date;
+
+  const submit = async () => {
+    if (sending.current) return;
+    sending.current = true;
+    setBusy(true);
+    setError(null);
+    try {
+      setSaved(await createOrder({
+        outlet_id: draft.outlet, requested_delivery_date: draft.date, temperature_requirement: draft.temperature,
+        order_weight_kg: draft.weight.trim(), order_volume_m3: draft.volume.trim(),
+      }));
+      setReview(false);
+    } catch (failure) {
+      if (failure instanceof ApiError && failure.status === 401) return onExpired();
+      // Order creation is not idempotent: after an uncertain failure, check the list first.
+      setError(failure instanceof ApiError
+        ? errorMessage(failure, "The order was not accepted.")
+        : "Connection interrupted. The order may not have been saved; check My orders before submitting again.");
+    } finally {
+      sending.current = false;
+      setBusy(false);
+    }
+  };
+
+  if (saved) {
+    const o = saved.order;
+    return (<>
+      <Alert k="s" t="Order received">The server accepted your order.</Alert>
+      {saved.cutoff_applied && <Alert k="w" t="Cutoff applied">Requested for {formatDate(saved.submitted_delivery_date)}; after the 16:00 cutoff it moved to {formatDate(o.requested_delivery_date)}.</Alert>}
+      <div className="card"><h2>Order {shortId(o.id)}</h2>
+        <Kv a="Status" b={STATUS_LABEL[o.status]} /><Kv a="Temperature" b={o.temperature_requirement === "chilled" ? "Chilled" : "Dry / ambient"} />
+        <Kv a="Weight" b={`${o.order_weight_kg} kg`} /><Kv a="Volume" b={`${o.order_volume_m3} m³`} /><Kv a="Delivery date" b={formatDate(o.requested_delivery_date)} /></div>
+      <Alert t="Planning still to come">Acceptance does not guarantee vehicle capacity; the dispatcher plans deliveries.</Alert>
+      <button className="p" onClick={() => go("order", o.id)}>Track order</button> <button onClick={() => { setSaved(null); update({ weight: "", volume: "" }); }}>New order</button>
+    </>);
+  }
+
+  const form = (e: FormEvent) => { e.preventDefault(); if (valid) { setError(null); setReview(true); } };
+  return (<>
+    <h1>New order</h1><p className="sub">One consignment per temperature type</p>
+    <Alert t="Cutoff 16:00 · Asia/Colombo">The server applies the cutoff and confirms the accepted delivery date.</Alert>
+    <div className="tab">{([["ambient", "Dry / ambient"], ["chilled", "Chilled"]] as const).map(([k, l]) => (
+      <button key={k} className={draft.temperature === k ? "on" : ""} onClick={() => update({ temperature: k })}>{l}</button>
+    ))}</div>
+    <form className="card" onSubmit={form}>
+      <h2>Consignment</h2>
+      {outlets.length > 1 && <label>Outlet<select value={draft.outlet} onChange={(e) => update({ outlet: e.target.value })}>
+        {outlets.map((o) => <option key={o} value={o}>{shortId(o)}</option>)}</select></label>}
+      <label>Total weight (kg)<input type="text" inputMode="decimal" required placeholder="e.g. 125.5" value={draft.weight} onChange={(e) => update({ weight: e.target.value })} aria-invalid={!!draft.weight && !validQuantity(draft.weight)} /></label><br /><br />
+      <label>Total volume (m³)<input type="text" inputMode="decimal" required placeholder="e.g. 0.875" value={draft.volume} onChange={(e) => update({ volume: e.target.value })} aria-invalid={!!draft.volume && !validQuantity(draft.volume)} /></label><br /><br />
+      <label>Requested delivery date<input type="date" required value={draft.date} onChange={(e) => update({ date: e.target.value })} /></label>
+      {(draft.weight && !validQuantity(draft.weight)) || (draft.volume && !validQuantity(draft.volume))
+        ? <Alert k="e" t="Check the quantities">Use a positive number with up to 3 decimal places.</Alert> : null}
+      {error && !review && <Alert k="e" t="Order not submitted">{error}</Alert>}
+      <button className="p" type="submit" style={{ width: "100%", marginTop: 10 }} disabled={!valid}>Review order</button>
+    </form>
+    {review && (
+      <Modal onClose={() => setReview(false)}>
+        <h2>Review your order</h2>
+        <Kv a="Outlet" b={shortId(draft.outlet)} /><Kv a="Temperature" b={draft.temperature === "chilled" ? "Chilled" : "Dry / ambient"} />
+        <Kv a="Weight" b={`${draft.weight} kg`} /><Kv a="Volume" b={`${draft.volume} m³`} /><Kv a="Requested date" b={formatDate(draft.date)} />
+        {error && <Alert k="e" t="Order not submitted">{error}</Alert>}
+        <div className="row" style={{ marginTop: 12 }}>
+          <button className="p" disabled={busy} onClick={submit}>{busy ? "Submitting…" : "Submit order"}</button>
+          <button onClick={() => setReview(false)} disabled={busy}>Back to edit</button>
+        </div>
+      </Modal>
+    )}
+  </>);
 }
