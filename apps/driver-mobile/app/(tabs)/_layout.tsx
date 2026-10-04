@@ -28,6 +28,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="delivery-needs-proof" options={{ href: null }} />
       <Tabs.Screen name="camera-permission-denied" options={{ href: null }} />
       <Tabs.Screen name="record-delivery" options={{ href: null }} />
+      <Tabs.Screen name="trip-waiting-for-loading" options={{ href: null }} />
       <Tabs.Screen name="next-stop" options={{ href: null }} />
       <Tabs.Screen name="trip-ready" options={{ href: null }} />
       <Tabs.Screen name="trip-complete" options={{ href: null }} />
