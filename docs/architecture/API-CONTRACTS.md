@@ -3,8 +3,8 @@
 ## Implementation status
 
 Authentication, Store order create/list/detail, Dispatcher order listing, fleet
-reads, daily fleet input GET/PUT, plan create/list/detail, plan publishing and Loader
-routes are implemented. Store receipt, live operations and Driver routes remain planned.
+reads, daily fleet input GET/PUT, plan create/list/detail, plan publishing, Loader and
+Driver routes are implemented. Store receipt, live operations and sync remain planned.
 A live, read-only plan compatibility preview is implemented for individual
 order/vehicle rules; it is not full feasibility validation or optimization.
 Internal capacity allocation and fixed-group route scheduling engines are also
@@ -22,6 +22,7 @@ Migration `0008_plan_optimizations` adds request replay keys and immutable-by-se
 input/result snapshots for each optimized revision. Migration `0009_plan_publications`
 adds publication replay records, per-trip fuel reservations and a one-published-revision index.
 Migration `0010_load_events` adds append-only loading events and trip readiness records.
+Migration `0011_delivery_events` adds Driver delivery events and proof-of-delivery photos.
 Separate daily-input routes now use this storage; the fleet list still returns
 only master data. Daily writes require conditional headers described below.
 The API also exposes `GET /health`,
@@ -901,9 +902,93 @@ Shared exports: `LoadStatus`, `LoaderTripResponse`, `LoaderTripListResponse`,
 GET  /api/v1/driver/trips
 GET  /api/v1/trips/{trip_id}
 POST /api/v1/trips/{trip_id}/start
-POST /api/v1/sync/events
+POST /api/v1/trips/{trip_id}/stops/{stop_id}/arrive
 POST /api/v1/trips/{trip_id}/stops/{stop_id}/pod
+GET  /api/v1/trips/{trip_id}/stops/{stop_id}/pod
+POST /api/v1/trips/{trip_id}/stops/{stop_id}/deliver
+POST /api/v1/trips/{trip_id}/stops/{stop_id}/fail
+POST /api/v1/trips/{trip_id}/complete
+POST /api/v1/sync/events            (planned: offline-sync batch)
 ```
+
+Every Driver route requires an active `DRIVER` who is the trip's assigned
+`driver_id`, whose `user_depots` still include the plan depot, on a trip of the
+plan's effective published revision. Anything else returns `404 Trip not found`;
+a stop outside the trip returns `404 Stop not found`. All responses use
+`Cache-Control: no-store`.
+
+`GET /driver/trips` takes `delivery_date`, `status`, `limit` (1-100) and `offset`, like
+the Loader list, and returns `DriverTripListResponse` (`DriverTripResponse` has the
+`LoaderTripResponse` fields). `GET /trips/{id}` returns `DriverTripDetailResponse`:
+the summary, `last_event_sequence`, `started_at`, `completed_at` and stops in sequence
+order. Each stop includes outlet brand/district/window, status, planned arrival,
+`requires_visit`, arrival/outcome times, failure reason/note, POD metadata (never the
+photo bytes) and orders with `load_status` and `deliverable`.
+
+**Deliverable orders** are a trip's served orders whose final loading outcome is
+`LOADED`. A stop **requires a visit** when it has at least one. `MISSING`/`DAMAGED`
+orders are never delivered and keep order status `LOADING`.
+
+Write bodies (`DeliveryEventRequest`): `{"event_id":"<client UUID>","occurred_at":null}`;
+`occurred_at` is optional, timezone-aware and at most five minutes ahead.
+
+| Endpoint | Allowed when | Effect |
+|---|---|---|
+| `start` | Trip `READY`, Colombo date on/after the delivery date, no other `IN_PROGRESS` trip for this driver or vehicle | Trip `IN_PROGRESS`; deliverable orders `LOADING -> OUT_FOR_DELIVERY`. |
+| `arrive` | Trip `IN_PROGRESS`, stop `PLANNED`, requires a visit, no other stop `ARRIVED` | Stop `ARRIVED`. Stops may be visited in any order, one at a time. |
+| `pod` | Trip `IN_PROGRESS`, stop `ARRIVED`, no POD yet | Stores proof of delivery (below). |
+| `deliver` (`pod_id` required) | Stop `ARRIVED`; `pod_id` is this stop's POD | Stop `DELIVERED`; deliverable orders `OUT_FOR_DELIVERY -> DELIVERED`. |
+| `fail` (`reason_code`, `note` required) | Stop `PLANNED` or `ARRIVED`, requires a visit | Stop `FAILED`; orders stay `OUT_FOR_DELIVERY`, never `DELIVERED`. |
+| `complete` | Every stop requiring a visit is `DELIVERED` or `FAILED` | Trip `COMPLETED`. |
+
+Failure reasons (`DeliveryFailureReason`): `OUTLET_CLOSED`, `RECEIVER_UNAVAILABLE`,
+`ACCESS_BLOCKED`, `DELIVERY_REFUSED`, `VEHICLE_ISSUE`, `OTHER`. The note (1-500
+characters, not blank) is the required failure evidence; a photo is not required for
+failures. Partial delivery of a stop is not supported: orders are whole consignments,
+and a stop is delivered or failed as one unit. Re-planning failed orders and
+reconciling missing/damaged orders belong to the Dispatcher operations batch.
+
+Responses (`DeliveryEventResponse`) include the event, its per-trip
+`sequence_number` and the current trip/stop status: 201 for a new event, 200 when
+the same `event_id` and payload (same endpoint, trip and stop; `occurred_at`
+compared as an instant) are replayed, even after later transitions. A reused
+`event_id` with different data returns 409. Transitions that are not allowed
+return 409; invalid bodies, reasons or times return 422. The database allows one
+start, one completion, one arrival and one outcome per stop.
+
+**Proof of delivery.** `POST .../pod` accepts JSON (no multipart dependency):
+
+```json
+{"pod_id":"<client UUID>","receiver_name":"Nimal Perera",
+ "photo_mime_type":"image/jpeg","photo_base64":"<base64>","captured_at":null}
+```
+
+Request bodies over 1,500,000 bytes (declared `Content-Length` or streamed size) are
+rejected with 413 before parsing. Only `image/jpeg` and `image/png` are accepted. The decoded photo must be 1 to
+1,000,000 bytes and its leading bytes must match the declared type; otherwise 422.
+Compress on the device first. Bytes are stored in PostgreSQL `BYTEA` with size and
+SHA-256. One POD per stop: the same `pod_id` and content replay 200 (`PodResponse`),
+different content or a second POD return 409. `GET .../pod` returns the raw image
+with its content type, `X-Content-Type-Options: nosniff` and `no-store`; it is
+allowed for the assigned Driver and for Dispatchers with depot access (404 otherwise).
+
+Every write locks the trip row (then the stop and orders), so concurrent
+transitions serialize; for example, concurrent deliver and fail on one stop yield
+one 201 and one 409. Route stops' outlets/sequence, driver assignments and fuel
+reservations are not changed. 503 responses hide database details; retry with the
+same ID. For offline outboxes, 409 means the request conflicts with current state
+(reload the trip; never resend it unchanged), and 401/403/404/413/422 are terminal for
+that payload. `occurred_at` is client time for display only; server `recorded_at` and
+`sequence_number` are authoritative. A POD may remain on a stop later marked `FAILED`
+(for example, a refusal after the photo); it is kept as evidence. After completion,
+orders of failed stops stay `OUT_FOR_DELIVERY` and missing/damaged orders stay
+`LOADING` until the Dispatcher operations batch resolves them; clients must not read
+`OUT_FOR_DELIVERY` on a `COMPLETED` trip as en route.
+
+Shared exports: `DeliveryEventType`, `DeliveryFailureReason`, `DriverTripResponse`,
+`DriverTripListResponse`, `DriverTripDetailResponse`, `DriverStopResponse`,
+`DriverOrderResponse`, `PodResponse`, `PodUploadRequest`, `DeliveryEventRequest`,
+`DeliverRequest`, `FailRequest`, `DeliveryEventResponse`.
 
 ## Shared statuses
 

@@ -1,10 +1,10 @@
 import type {
-  DeferralReason, LoadStatus, OrderStatus, PlanStatus, Role, StopStatus, TripStatus,
+  DeferralReason, DeliveryEventType, DeliveryFailureReason, LoadStatus, OrderStatus, PlanStatus, Role, StopStatus, TripStatus,
 } from '@waypoint/shared-types';
 
 export type {
   Role, OrderStatus, TripStatus, PlanStatus, StopStatus, AssignmentOutcome, DeferralReason, LoadStatus,
-  SyncStatus,
+  DeliveryEventType, DeliveryFailureReason, SyncStatus,
 } from '@waypoint/shared-types';
 export interface HealthResponse { status: 'ok'; service: string; version: string }
 export interface LoginRequest { email: string; password: string }
@@ -339,6 +339,95 @@ export interface LoadEventResponse {
 export interface TripReadyRequest {
   request_id: string;
   last_event_sequence: number;
+}
+/** Same summary fields as the Loader trip list, filtered to the caller's own trips. */
+export type DriverTripResponse = LoaderTripResponse;
+export interface DriverTripListResponse {
+  items: DriverTripResponse[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+export interface PodResponse {
+  pod_id: string;
+  trip_id: string;
+  stop_id: string;
+  receiver_name: string;
+  photo_mime_type: 'image/jpeg' | 'image/png';
+  photo_size_bytes: number;
+  photo_sha256: string;
+  captured_at: string | null;
+  uploaded_at: string;
+  uploaded_by: string;
+}
+export interface DriverOrderResponse {
+  order_id: string;
+  order_status: OrderStatus;
+  temperature_requirement: 'ambient' | 'chilled';
+  order_weight_kg: string;
+  order_volume_m3: string;
+  load_status: LoadStatus | null;
+  deliverable: boolean;
+}
+export interface DriverStopResponse {
+  stop_id: string;
+  outlet_id: string;
+  outlet_brand: string;
+  outlet_district: string;
+  window_open_time: string;
+  window_close_time: string;
+  sequence_number: number;
+  status: StopStatus;
+  planned_arrival_time: string | null;
+  requires_visit: boolean;
+  arrived_at: string | null;
+  outcome_at: string | null;
+  failure_reason: DeliveryFailureReason | null;
+  failure_note: string | null;
+  pod: PodResponse | null;
+  orders: DriverOrderResponse[];
+}
+export interface DriverTripDetailResponse {
+  trip: DriverTripResponse;
+  last_event_sequence: number;
+  started_at: string | null;
+  completed_at: string | null;
+  stops: DriverStopResponse[];
+}
+/** Body for start, arrive and complete. Keep event_id and the payload unchanged on retry. */
+export interface DeliveryEventRequest {
+  event_id: string;
+  occurred_at?: string | null;
+}
+export interface DeliverRequest extends DeliveryEventRequest {
+  pod_id: string;
+}
+export interface FailRequest extends DeliveryEventRequest {
+  reason_code: DeliveryFailureReason;
+  note: string;
+}
+/** JPEG/PNG up to 1,000,000 bytes, base64 encoded. Upload after arrival, before deliver. */
+export interface PodUploadRequest {
+  pod_id: string;
+  receiver_name: string;
+  photo_mime_type: 'image/jpeg' | 'image/png';
+  photo_base64: string;
+  captured_at?: string | null;
+}
+export interface DeliveryEventResponse {
+  event_id: string;
+  trip_id: string;
+  stop_id: string | null;
+  event_type: DeliveryEventType;
+  reason_code: DeliveryFailureReason | null;
+  note: string | null;
+  pod_id: string | null;
+  sequence_number: number;
+  occurred_at: string | null;
+  recorded_at: string;
+  recorded_by: string;
+  trip_status: TripStatus;
+  stop_status: StopStatus | null;
 }
 export class ApiError extends Error {
   constructor(public readonly status: number, message: string) { super(message); this.name = 'ApiError'; }

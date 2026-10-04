@@ -6,14 +6,17 @@ This is the current implementation queue; the original feature lists below also
 include completed work and frontend tasks. Use one reviewable commit per batch,
 with `feature/` branches. The user commits and pushes after reviewing each batch.
 
-**Completed:** draft optimization (`feature/planning-optimize-api`) and batch 1
-publishing (`feature/planning-publish`).
+**Completed:** draft optimization (`feature/planning-optimize-api`), batch 1
+publishing (`feature/planning-publish`) and batch 2 loading (`feature/loader-workflow`).
 
-**Current batch (2):** `feature/loader-workflow` — depot-scoped Loader trip list and
-loading view, append-only per-order loaded/missing/damaged events with stable IDs,
-guarded `PLANNED -> LOADING -> READY` transitions and migration `0010_load_events`.
+**Current batch (3):** `feature/driver-delivery` — assigned-Driver trip list/detail,
+guarded start, arrival, delivered/failed stop outcomes, completion, proof-of-delivery
+upload/retrieval in PostgreSQL, stable event IDs and migration `0011_delivery_events`.
 
-**Five backend batches remain after this commit (3–7):**
+Open follow-up for batch 6: resolve orders left `OUT_FOR_DELIVERY` (failed stops)
+or `LOADING` (missing/damaged) after a trip completes.
+
+**Four backend batches remain after this commit (4–7):**
 
 | Next | Suggested branch | Commit scope / completion check |
 |---|---|---|

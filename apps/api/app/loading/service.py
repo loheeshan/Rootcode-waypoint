@@ -48,7 +48,7 @@ def fail(status: int, detail: str) -> HTTPException:
     return HTTPException(status_code=status, detail=detail, headers={"Cache-Control": "no-store"})
 
 
-def _scoped(user: User) -> Select[Trip, Plan, PlanPublication]:
+def scoped_trips(user: User) -> Select[Trip, Plan, PlanPublication]:
     """Trips of each plan's effective published revision in the caller's current depots."""
     allowed = select(UserDepot.depot_id).where(UserDepot.user_id == user.id)
     return (
@@ -60,12 +60,12 @@ def _scoped(user: User) -> Select[Trip, Plan, PlanPublication]:
     )
 
 
-def _trip_times(publication: PlanPublication) -> dict[UUID, tuple[datetime, datetime]]:
+def trip_times(publication: PlanPublication) -> dict[UUID, tuple[datetime, datetime]]:
     saved = PublicationResponse.model_validate(publication.result_snapshot)
     return {trip.trip_id: (trip.departure_at, trip.return_at) for trip in saved.trips}
 
 
-def _summary(
+def trip_summary(
     trip: Trip,
     plan: Plan,
     times: dict[UUID, tuple[datetime, datetime]],
@@ -91,7 +91,7 @@ def _summary(
     )
 
 
-def _counts(session: Session, trip_ids: list[UUID]) -> tuple[dict[UUID, int], dict[UUID, int]]:
+def trip_counts(session: Session, trip_ids: list[UUID]) -> tuple[dict[UUID, int], dict[UUID, int]]:
     stops: dict[UUID, int] = {}
     for trip_id, count in session.execute(
         select(TripStop.trip_id, func.count())
@@ -119,7 +119,7 @@ def list_loader_trips(
     limit: int,
     offset: int,
 ) -> LoaderTripListResponse:
-    query = _scoped(user)
+    query = scoped_trips(user)
     if delivery_date is not None:
         query = query.where(Plan.delivery_date == delivery_date)
     if status is not None:
@@ -130,14 +130,14 @@ def list_loader_trips(
         .limit(limit)
         .offset(offset)
     ).all()
-    stops, orders = _counts(session, [trip.id for trip, _, _ in rows])
+    stops, orders = trip_counts(session, [trip.id for trip, _, _ in rows])
     times: dict[UUID, dict[UUID, tuple[datetime, datetime]]] = {}
     items = []
     for trip, plan, publication in rows:
         if publication.request_id not in times:
-            times[publication.request_id] = _trip_times(publication)
+            times[publication.request_id] = trip_times(publication)
         items.append(
-            _summary(
+            trip_summary(
                 trip,
                 plan,
                 times[publication.request_id],
@@ -151,7 +151,7 @@ def list_loader_trips(
 def _scoped_trip(
     session: Session, user: User, trip_id: UUID, *, lock: bool = False
 ) -> tuple[Trip, Plan, PlanPublication]:
-    query = _scoped(user).where(Trip.id == trip_id)
+    query = scoped_trips(user).where(Trip.id == trip_id)
     row = session.execute(query.with_for_update(of=Trip) if lock else query).first()
     if row is None:
         raise fail(404, "Trip not found")
@@ -159,7 +159,7 @@ def _scoped_trip(
     return trip, plan, publication
 
 
-def _latest_events(session: Session, trip_id: UUID) -> tuple[dict[UUID, LoadEvent], int]:
+def latest_load_events(session: Session, trip_id: UUID) -> tuple[dict[UUID, LoadEvent], int]:
     latest: dict[UUID, LoadEvent] = {}
     last = 0
     for event in session.scalars(
@@ -180,11 +180,11 @@ def _completion(record: TripLoadingCompletion | None) -> LoadingCompletionRespon
         missing_count=record.missing_count,
         damaged_count=record.damaged_count,
         confirmed_by=record.confirmed_by,
-        confirmed_at=_aware(record.confirmed_at),
+        confirmed_at=as_utc(record.confirmed_at),
     )
 
 
-def _aware(value: datetime) -> datetime:
+def as_utc(value: datetime) -> datetime:
     # SQLite returns naive values; every stored timestamp is written in UTC.
     return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
 
@@ -201,7 +201,7 @@ def _view(
         .where(PlanAssignment.trip_id == trip.id)
         .order_by(Order.id)
     ).all()
-    latest, last = _latest_events(session, trip.id)
+    latest, last = latest_load_events(session, trip.id)
     by_stop: dict[UUID, list[LoadingOrderResponse]] = {stop.id: [] for stop in stops}
     counts = dict.fromkeys(LoadStatus, 0)
     for assignment, order in assigned:
@@ -224,7 +224,7 @@ def _view(
         )
     completion = session.get(TripLoadingCompletion, trip.id)
     return TripLoadingResponse(
-        trip=_summary(trip, plan, _trip_times(publication), len(stops), len(assigned)),
+        trip=trip_summary(trip, plan, trip_times(publication), len(stops), len(assigned)),
         last_event_sequence=last,
         loaded_count=counts[LoadStatus.LOADED],
         missing_count=counts[LoadStatus.MISSING],
@@ -237,7 +237,7 @@ def _view(
                 sequence_number=stop.sequence_number,
                 status=StopStatus(stop.status),
                 planned_arrival_time=(
-                    _aware(stop.planned_arrival_time) if stop.planned_arrival_time else None
+                    as_utc(stop.planned_arrival_time) if stop.planned_arrival_time else None
                 ),
                 orders=by_stop[stop.id],
             )
@@ -260,8 +260,8 @@ def _event_response(event: LoadEvent, stop_id: UUID, trip: Trip) -> LoadEventRes
         status=LoadStatus(event.status),
         note=event.note,
         sequence_number=event.sequence_number,
-        occurred_at=_aware(event.occurred_at) if event.occurred_at else None,
-        recorded_at=_aware(event.recorded_at),
+        occurred_at=as_utc(event.occurred_at) if event.occurred_at else None,
+        recorded_at=as_utc(event.recorded_at),
         recorded_by=event.recorded_by,
         trip_status=TripStatus(trip.status),
     )
@@ -358,7 +358,7 @@ def mark_trip_ready(
         return _view(session, trip, plan, publication), False
     if trip.status not in (TripStatus.PLANNED, TripStatus.LOADING):
         raise fail(409, "Loading is finalized for this trip")
-    latest, last = _latest_events(session, trip.id)
+    latest, last = latest_load_events(session, trip.id)
     if last != payload.last_event_sequence:
         raise fail(409, "Loading changed since your last refresh; review it and retry")
     assigned = set(
