@@ -1,7 +1,4 @@
 import { useEffect, useState } from 'react';
-import * as SecureStore from 'expo-secure-store';
-
-export const AUTH_TOKEN_KEY = 'waypoint_driver_token';
 
 type Destination = '/login' | null;
 
@@ -25,8 +22,7 @@ export function useBootstrap() {
       {
         label: 'Checking secure session...',
         run: async () => {
-          // Will be used to decide login vs trips once those screens exist.
-          await SecureStore.getItemAsync(AUTH_TOKEN_KEY);
+          // AuthProvider restores and verifies the SecureStore session in parallel.
         },
       },
       {

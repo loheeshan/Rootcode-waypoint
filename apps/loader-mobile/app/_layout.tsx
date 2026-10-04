@@ -5,6 +5,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Text, View } from 'react-native';
 import { initializeDatabase } from '../src/storage/database';
 import { DialogProvider } from '../src/features/dialogs/DialogProvider';
+import { AuthGate, AuthProvider } from '../src/services/auth';
 
 class StorageBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
   state = { failed: false };
@@ -21,12 +22,15 @@ export default function RootLayout() {
       <SafeAreaView style={{ flex: 1 }}>
         <StorageBoundary>
           <SQLiteProvider databaseName="waypoint-loader.db" onInit={initializeDatabase}>
-            <DialogProvider>
-              <Stack screenOptions={{ headerShown: false }}>
-                <Stack.Screen name="index" />
-                <Stack.Screen name="tabs" />
-              </Stack>
-            </DialogProvider>
+            <AuthProvider>
+              <DialogProvider>
+                <AuthGate />
+                <Stack screenOptions={{ headerShown: false }}>
+                  <Stack.Screen name="index" />
+                  <Stack.Screen name="tabs" />
+                </Stack>
+              </DialogProvider>
+            </AuthProvider>
           </SQLiteProvider>
         </StorageBoundary>
       </SafeAreaView>

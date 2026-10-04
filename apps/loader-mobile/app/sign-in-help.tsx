@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SignInHelpModal } from '../src/components/modals/SignInHelpModal';
 import { popupColors } from '../src/theme/popupTokens';
+import { LOGIN } from '../src/services/auth';
 
 export default function SignInHelpScreen() {
   const router = useRouter();
@@ -10,7 +11,7 @@ export default function SignInHelpScreen() {
 
   const handleBackToSignIn = () => {
     setVisible(false);
-    router.replace('/'); // use '/login' if the Loader app has a login route
+    router.replace(LOGIN);
   };
 
   return (
