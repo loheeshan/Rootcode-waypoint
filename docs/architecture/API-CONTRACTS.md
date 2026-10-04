@@ -786,6 +786,13 @@ interface PublicationResponse {
 includes this revision. Balance = quota - consumed - reservations for trips dated today
 or later. Earlier days use consumed totals, so reservations are never released; today's
 reservations can double count fuel already in today's total (conservative).
+**Operational requirement:** once a day ends, its consumed total must be final. A
+reservation stops counting the day after its trip, so a partial total recorded early
+(for example `0` before departure) would under-count weekly fuel.
+Saved deferral reasons are published as explained at optimization time; they are
+not recomputed against current inputs. The optimizer does not yet block shifts that
+overlap another plan's published trip (e.g. an overnight return); such a revision is
+rejected at publish with 409, so adjust the shift and re-optimize.
 `GET .../publication` returns the saved response, or 404 when unpublished.
 
 | Status | Meaning |

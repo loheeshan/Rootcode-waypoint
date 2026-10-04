@@ -171,6 +171,8 @@ def _check_drivers(session: Session, plan: Plan, driver_ids: list[UUID]) -> None
                 Role.code == RoleCode.DRIVER,
                 UserDepot.depot_id == plan.depot_id,
             )
+            # Lock the role/depot grants so revocation cannot commit mid-publication.
+            .with_for_update(of=(UserRole, UserDepot))
         )
     )
     if eligible != set(driver_ids):
@@ -188,7 +190,14 @@ def create_publication(
     plan = scoped_plan(session, user, plan_id, lock=True)
     fingerprint = hashlib.sha256(
         json.dumps(
-            {"revision_id": str(revision_id), **payload.model_dump(mode="json")},
+            {
+                "revision_id": str(revision_id),
+                "request_id": str(payload.request_id),
+                # Assignment order carries no meaning; retries may reorder it.
+                "driver_assignments": sorted(
+                    (str(item.trip_id), str(item.driver_id)) for item in payload.driver_assignments
+                ),
+            },
             sort_keys=True,
             separators=(",", ":"),
         ).encode()
