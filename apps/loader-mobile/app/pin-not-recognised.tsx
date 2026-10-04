@@ -17,9 +17,9 @@ export default function PinNotRecognisedScreen() {
     router.replace('/'); // use '/login' if the Loader app has a login route
   };
 
-  const handleGetHelp = () => {
+   const handleGetHelp = () => {
     setVisible(false);
-    router.replace('/contact-bay-lead');
+    router.replace('/sign-in-help');
   };
 
   return (
