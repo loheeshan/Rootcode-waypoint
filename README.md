@@ -195,6 +195,15 @@ preserves matching data and restores missing demo assignments; conflicting rows
 abort without overwriting them. Orders and trips are not seeded. See the
 [resource setup guide](apps/api/app/fleet/README.md#synthetic-demo-data) for details.
 
+### Demo scenarios and login check
+
+After both seeds, `docker compose exec api python -m app.demo.check_logins` verifies all four
+demo logins against the running API (it prompts for the password and prints no secrets), and
+`docker compose exec api python -m app.demo.scenario --stage plan|published|ready|operations`
+creates a coherent demo day through the real services with labelled synthetic travel data.
+See the [integration handoff](docs/testing/INTEGRATION-HANDOFF.md#demo-data) for stages,
+dates, rerun rules and emulator/LAN API settings.
+
 ## Checks
 
 ```powershell
