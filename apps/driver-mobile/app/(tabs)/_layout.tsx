@@ -1,12 +1,14 @@
 import { Tabs } from "expo-router";
 import { AppTabBar } from "../../src/components/AppTabBar";
 import { DriverTabBar } from "../../src/components/DriverTabBar";
+import { DriverTripProvider } from "../../src/features/driving/DriverTripProvider";
 
 // Screens that use the OLD AppTabBar. All others use DriverTabBar.
 const APP_TAB_ROUTES = ["sync"];
 
 export default function TabsLayout() {
   return (
+    <DriverTripProvider>
     <Tabs
       initialRouteName="today"
       tabBar={(props) => {
@@ -50,5 +52,6 @@ export default function TabsLayout() {
       <Tabs.Screen name="trip-revision" options={{ href: null }} />
       <Tabs.Screen name="today-reefer-fault" options={{ href: null }} />
     </Tabs>
+    </DriverTripProvider>
   );
 }

@@ -1,3 +1,4 @@
+import { Directory, Paths } from 'expo-file-system';
 import * as SecureStore from 'expo-secure-store';
 import type { AuthUser } from '@waypoint/api-contracts';
 
@@ -32,5 +33,12 @@ export const session = {
     memoryToken = null;
     await SecureStore.deleteItemAsync(TOKEN_KEY);
     await SecureStore.deleteItemAsync(PROFILE_KEY);
+    // Proof photos downloaded for viewing belong to this account; unsent POD drafts are kept per user.
+    try {
+      const viewed = new Directory(Paths.cache, 'pod-view');
+      if (viewed.exists) viewed.delete();
+    } catch {
+      // Nothing cached.
+    }
   },
 };

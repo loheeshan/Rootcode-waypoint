@@ -16,7 +16,15 @@
       "expo-sqlite",
       "expo-secure-store",
       "expo-splash-screen",
-      "expo-status-bar"
+      "expo-status-bar",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Waypoint Driver uses the camera to photograph delivered goods as proof of delivery.",
+          "photosPermission": false,
+          "microphonePermission": false
+        }
+      ]
     ],
     "ios": {
       "supportsTablet": true,

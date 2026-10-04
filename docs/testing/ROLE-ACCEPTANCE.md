@@ -34,11 +34,11 @@ Use the real FastAPI/PostgreSQL backend; mocked responses do not count. Never re
 
 | Flow | Expected | Result |
 |---|---|---|
-| Login on emulator/device -> `/me` | DRIVER, depot scope, own trips only | NOT RUN |
-| Start blocked until READY; start READY trip | `IN_PROGRESS` | NOT RUN |
-| Arrive -> photo POD -> deliver | Store sees `DELIVERED` | NOT RUN |
-| Fail with reason/note | Stop FAILED; orders never DELIVERED | NOT RUN |
-| Complete trip | `COMPLETED` once every visited stop has an outcome | NOT RUN |
+| Login on emulator/device -> `/me` | DRIVER, depot scope, own trips only | PASS (Step 6, emulator; other driver 404) |
+| Start blocked until READY; start READY trip | `IN_PROGRESS` | PASS (Step 6) |
+| Arrive -> photo POD -> deliver | Store sees `DELIVERED` | PASS (Step 6; photo read back from the server) |
+| Fail with reason/note | Stop FAILED; orders never DELIVERED | PASS (Step 6) |
+| Complete trip | `COMPLETED` once every visited stop has an outcome | PASS (Step 6) |
 | Offline POD/delivery -> relaunch -> reconnect | One upload and event result | NOT RUN |
 
 ## Cross-role (Step 9)

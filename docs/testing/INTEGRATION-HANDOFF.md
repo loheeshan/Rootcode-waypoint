@@ -11,8 +11,8 @@ Never record passwords, tokens or `.env` contents here.
 | 2 Auth (Store, Loader, Driver) | `feature/integration-demo-auth` | `dev` `68db449` | Done (`978bb94`) |
 | 3 Store web | `feature/integration-store-web` | Step 2 `978bb94` | Done (`e6b42be`, merged #205) |
 | 4 Dispatcher web | `feature/integration-dispatcher-web` | — | **Deferred**: frontend team still building Dispatcher web |
-| 5 Loader online | `feature/integration-loader-mobile` | `dev` `066dcad` | In review |
-| 6 Driver online | `feature/integration-driver-mobile` | Step 5 | Pending |
+| 5 Loader online | `feature/integration-loader-mobile` | `dev` `066dcad` | Done (`b865967`, merged #206) |
+| 6 Driver online | `feature/integration-driver-mobile` | `dev` `8113aa3` | In review |
 | 7 Loader offline | `feature/integration-loader-offline` | Step 6 | Pending |
 | 8 Driver offline | `feature/integration-driver-offline` | Step 7 | Pending |
 | 9 Acceptance | `feature/integration-release-validation` | all | Pending (needs Step 4) |
@@ -246,6 +246,65 @@ Not changed: older prototype screens under `src/features/flows`, `dialogs` and `
 (e.g. Profile, Settings, Notifications from the header) still show static text. The Today ->
 Checklist -> Report -> Depart flow no longer links to them.
 
+## Step 6: Driver mobile connected to the API (online)
+
+- Today lists `GET /driver/trips` for today's Colombo date; Stops shows `GET /trips/{id}` in sequence.
+  Start is shown only for `READY` (the server performs READY -> IN_PROGRESS); before that the trip
+  reads "Waiting for loading" and deliverability is not shown as final.
+- Stop: arrive, then proof of delivery, or "Could not deliver" (one backend reason code + required
+  note, allowed before or after arrival as the API allows). Orders not loaded are marked "do not deliver";
+  a failed stop always reads "Not delivered" and its orders are never shown as delivered.
+- Proof matches the API exactly: receiver name + one photo. No signature or quantities are collected.
+  The camera photo is re-encoded as JPEG and shrunk only until it fits 1,000,000 bytes, then kept in the
+  app's document folder with a small record (`pod_id`, receiver, capture time, user). Retries and
+  relaunches re-send the same `pod_id` and bytes; a changed receiver or photo gets a new `pod_id`; the
+  local copy is deleted once the server has the proof, and drafts from another account are discarded.
+  Deliver uses the server's `pod_id`. The stored photo is read back from `GET .../pod`.
+- Start, arrive, deliver, fail and complete reuse one `event_id` per action until accepted; double
+  taps are ignored while a request is in flight; 409s reload the server view and show the reason.
+- Camera denied (re-askable or blocked -> Open settings), cancelled and unusable photos have their own states.
+- Proof and failure forms are rebuilt for each stop (hidden tab routes otherwise keep the previous
+  stop's receiver, reason or note); late draft loads and out-of-order trip reloads are ignored; viewed
+  proof photos are removed from the cache on sign-out or expiry; errors from another stop are cleared.
+- Both mobile apps: requests abort after 30 s (90 s for large uploads) and show a connection error
+  instead of spinning forever; the timer is cleared when the request finishes.
+- Offline saving is Step 8: without a connection actions fail with "Nothing was confirmed".
+
+Verification (Pixel 7 emulator, Expo Go SDK 56, disposable database with a generated test password,
+`published` scenario for today; Loader steps through the real Loader API):
+
+| Check | Result |
+|---|---|
+| Sign-in as `driver@waypoint.demo` -> Today with 2 server trips | PASS |
+| Trip not READY | PASS: "Waiting for loading", no Start |
+| Loader marks ready -> pull to refresh -> Start (double tap) | PASS: one 201, IN_PROGRESS |
+| Arrive | PASS: server arrival time shown |
+| Upload with no photo | PASS: validation, nothing sent |
+| Camera denied once / twice | PASS: "Camera access needed" / "Camera permission denied" + Open settings |
+| Camera cancelled | PASS: "No photo taken" |
+| Photo captured | PASS: 26 KB JPEG kept on the phone |
+| Upload with API stopped | PASS (after fix): times out with "Cannot reach the Waypoint server"; before the fix it spun forever |
+| Kill and relaunch | PASS: remembered session; draft photo and receiver restored |
+| Upload (double tap) | PASS: one 201; photo read back from the server (200) |
+| Deliver (double tap) -> complete | PASS: one 201 each; trip COMPLETED, 1 delivered |
+| Trip with one MISSING order -> "Could not deliver" empty, then Outlet closed + note | PASS: validation; one 201; stop FAILED; missing order "do not deliver" |
+| Store view of orders (API) | PASS: delivered order DELIVERED; failed stop's orders OUT_FOR_DELIVERY / LOADING (never DELIVERED) |
+| Invalid images (API) | PASS: bad base64, text as JPEG, JPEG declared PNG, GIF type, blank receiver -> 422; oversized -> 413; deliver without POD -> 409 |
+| Another driver (API) | PASS: empty list; detail, POD, start, arrive -> 404 |
+| Loader / Store on Driver endpoints (API) | PASS: 403 (Store cannot read POD photos) |
+| Action on a completed trip (API) | PASS: 409 "The trip is not in progress" |
+| Duplicates (DB) | PASS: 2 TRIP_STARTED, 2 ARRIVED, 1 DELIVERED, 1 FAILED, 2 TRIP_COMPLETED, 1 POD |
+| `pnpm test` | PASS 32/32 (7 new POD draft tests: pod_id reuse/renewal, retake cleanup, relaunch, other account, denied/cancelled, size fitting) |
+| Driver + Loader typecheck, both exports, Driver driving files lint | PASS (Driver keeps the pre-existing `TurnByTurnCard` typecheck errors and 6 lint errors) |
+| After Guardian review (fresh database): fail a stop that already has proof; Trip 2 proof/deliver/complete | PASS: failed stop hides its proof and reads "Not delivered"; new forms open empty; delivery confirmed |
+| Form state across two stops of one trip | NOT RUN on device: the demo scenario has one stop per trip and Expo Go deep links reload the app; fixed by remounting the proof and failure forms per stop and ignoring late draft loads (code review) |
+| Physical device / iOS | NOT RUN: emulator only |
+
+Notes: Expo Go asks for camera access per project in addition to Android's prompt. `app/start-trip.tsx`
+(from the frontend team) is an empty route file and triggers an Expo Router warning; not changed.
+Prototype screens not on this flow (`next-stop-*`, `trip-complete`, `photo-attention`, offline failure, etc.)
+still show static design data.
+
 ## Next step
 
-Step 6 on `feature/integration-driver-mobile` (Step 4 Dispatcher web stays deferred).
+Step 7 on `feature/integration-loader-offline` (Step 4 Dispatcher web stays deferred).
