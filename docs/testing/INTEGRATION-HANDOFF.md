@@ -8,8 +8,8 @@ Never record passwords, tokens or `.env` contents here.
 | Step | Branch | Base | Status |
 |---|---|---|---|
 | 1 Demo foundation | `feature/integration-demo-foundation` | `dev` `be6967e` (all backend batches incl. #201) | Done (`aa3add7`, merged #202) |
-| 2 Auth (Store, Loader, Driver) | `feature/integration-demo-auth` | `dev` `68db449` | In review |
-| 3 Store web | `feature/integration-store-web` | Step 2 | Pending |
+| 2 Auth (Store, Loader, Driver) | `feature/integration-demo-auth` | `dev` `68db449` | Done (`978bb94`) |
+| 3 Store web | `feature/integration-store-web` | Step 2 `978bb94` | In review |
 | 4 Dispatcher web | `feature/integration-dispatcher-web` | — | **Deferred**: frontend team still building Dispatcher web |
 | 5 Loader online | `feature/integration-loader-mobile` | Step 3 | Pending |
 | 6 Driver online | `feature/integration-driver-mobile` | Step 5 | Pending |
@@ -167,7 +167,41 @@ Expo Go on the emulator. Manual check with your API running and demo data seeded
 Known: the frontend team's Dispatcher sidebar/header now also renders around `/store`
 (from `dev`); not changed here.
 
+## Step 3: Store web connected to the API
+
+- All Store screens use the scoped Store API through `/api/backend` (`apps/web/features/store/data/store.ts`);
+  the runtime mock data, demo toggles, fake notifications and line-level issue modal were removed.
+- New order = one consignment: temperature, weight (kg), volume (m³), requested date, outlet
+  from `/me`. The server applies the 16:00 cutoff and returns the accepted date; the UI shows it.
+  Creation is not idempotent, so the button is disabled while submitting and an uncertain
+  failure tells the user to check My orders before resubmitting.
+- Order list filters by real statuses with server pagination; Home counts use server totals.
+- Order detail shows the real status timeline. Only `DELIVERED` orders offer Confirm receipt;
+  the receipt request ID is reused for retries and a 409 "already confirmed" shows the saved receipt.
+- The shared client now keeps the API error `detail`; `errorMessage()` shows server validation text.
+
+Missing Store API fields (shown as unavailable, not invented): deferral reason and revised date,
+ETA/route progress, outlet names, notifications, receipt discrepancies, and a failed-delivery
+status (orders at a failed stop still read `OUT_FOR_DELIVERY` to the Store).
+
+Verification (production web build, disposable database, generated test password; fixtures from
+the `operations` scenario with a next-morning test clock):
+
+| Check | Result |
+|---|---|
+| Home: outlet/email from `/me`, server counts, real orders | PASS |
+| Invalid quantity (4 decimals) | PASS: client message, review disabled |
+| Create order for tomorrow after 16:00, double-click submit | PASS: one order; server moved the date; cutoff message shown |
+| Same-day date | PASS: server 422 message shown, draft kept, nothing created |
+| Reload -> My orders | PASS: new order listed first with server values |
+| Failed-stop order | PASS: timeline to "Out for delivery", no receipt action; API receipt POST 409 |
+| Deferred order | PASS: honest deferral message, no receipt action |
+| Delivered order -> Confirm receipt (double click) | PASS: one receipt, `RECEIPT_CONFIRMED`, saved record shown |
+| Other outlet's order | PASS: not listed; detail and receipt 404 |
+| `pnpm test` | PASS 25/25 (4 Store data tests, 1 client error-detail test) |
+| Web typecheck / lint | PASS |
+| Automated browser E2E | NOT ADDED: no E2E runner in the repo (Playwright would need a browser download) |
+
 ## Next step
 
-Step 3 on `feature/integration-store-web`: connect Store orders, tracking and receipts to the
-API through `/api/backend`. Dispatcher login and Step 4 stay deferred.
+Step 5 on `feature/integration-loader-mobile` (Step 4 Dispatcher web stays deferred).

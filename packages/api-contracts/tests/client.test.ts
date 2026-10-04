@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, createApiClient } from '../src/index';
+import { ApiError, createApiClient, errorMessage } from '../src/index';
 afterEach(() => vi.unstubAllGlobals());
 describe('shared API client', () => {
   it('passes the caller token and keeps the API prefix', async () => {
@@ -65,5 +65,17 @@ describe('shared API client', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 204 })));
     expect(await createApiClient('http://localhost').requestWithMetadata('/event'))
       .toEqual({ data: undefined, status: 204, etag: null, location: null });
+  });
+  it('keeps the error detail for user-facing messages', async () => {
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ detail: 'Order not found' }), { status: 404 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ detail: [{ loc: ['body', 'order_weight_kg'], msg: 'Input should be greater than 0', type: 'greater_than' }] }), { status: 422 })));
+    const client = createApiClient('http://localhost');
+    const missing = await client.request('/x').catch((e: unknown) => e);
+    expect(missing).toMatchObject({ status: 404, detail: 'Order not found' });
+    expect(errorMessage(missing)).toBe('Order not found');
+    const invalid = await client.request('/x').catch((e: unknown) => e);
+    expect(errorMessage(invalid)).toBe('order weight kg: Input should be greater than 0');
+    expect(errorMessage(new TypeError('x'), 'fallback')).toBe('fallback');
   });
 });

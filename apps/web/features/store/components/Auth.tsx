@@ -3,11 +3,10 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { SignInError, signInMessages, type AuthUser } from "@waypoint/api-contracts";
 import { Alert } from "./ui";
-import type { State, SetFn } from "../data/mock";
 import { DEMO_EMAILS, webSignIn } from "@/lib/auth-client";
 
-export default function Auth({ S, set, onSignedIn, notice }: {
-  S: State; set: SetFn; onSignedIn: (user: AuthUser) => void; notice?: string | null;
+export default function Auth({ expired, onSignedIn, notice }: {
+  expired: boolean; onSignedIn: (user: AuthUser) => void; notice?: string | null;
 }) {
   const [v, setV] = useState("in");
   const [em, setEm] = useState("");
@@ -26,7 +25,6 @@ export default function Auth({ S, set, onSignedIn, notice }: {
       const user = await webSignIn(em.trim(), pw, remember, "STORE_MANAGER");
       setPw("");
       onSignedIn(user);
-      set({ signed: true, expired: false, route: "home" });
     } catch (err) {
       setError(err instanceof SignInError ? signInMessages[err.reason] : signInMessages.unavailable);
     } finally {
@@ -38,8 +36,8 @@ export default function Auth({ S, set, onSignedIn, notice }: {
     <div style={{ width: "100%" }}><div className="sig card">
       <div className="logo" style={{ padding: 0 }}>Waypoint</div><div className="role" style={{ padding: "0 0 12px" }}>STORE MANAGER</div>
       {v === "in" && (<form onSubmit={signIn}>
-        <h2>{S.expired ? "Your session has expired" : "Welcome back"}</h2>
-        {S.expired && <p className="m">Sign in again to continue.</p>}
+        <h2>{expired ? "Your session has expired" : "Welcome back"}</h2>
+        {expired && <p className="m">Sign in again to continue.</p>}
         {notice && <Alert k="w" t={notice} />}
         {error && <Alert k="e" t={error} />}
         <label>Work email<input type="email" autoComplete="username" required value={em} onChange={(e) => setEm(e.target.value)} /></label><br /><br />

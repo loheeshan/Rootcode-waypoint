@@ -1,43 +1,84 @@
 "use client";
-import { Alert, Kv } from "./ui";
-import { DEF } from "../data/mock";
-import type { Order, State, SetFn, GoFn, PatchFn, Issue } from "../data/mock";
+import { useEffect, useRef, useState } from "react";
+import { ApiError, errorMessage, type ReceiptResponse } from "@waypoint/api-contracts";
+import { Alert, Kv, LoadError, Loading, useLoad } from "./ui";
+import { confirmReceipt, formatDate, formatTime, getOrder, getReceipt, shortId, temperatureLabel } from "../data/store";
+import type { GoFn } from "../data/store";
 
-export default function Receipt({ o, S, set, go, patch, submit }: { o: Order; S: State; set: SetFn; go: GoFn; patch: PatchFn; submit: () => void }) {
-  const lines = o.lines || DEF;
-  const mark = (i: number, m: "ok" | Issue) => patch(o.id, { lines: lines.map((l, j) => (j === i ? { ...l, m } : l)) });
-  if (o.done) return (<>
+// One request ID per order for this page session: retries and double clicks reuse it, so the
+// server records at most one receipt and replays the saved result.
+const requestIds = new Map<string, string>();
+const requestIdFor = (orderId: string) => {
+  if (!requestIds.has(orderId)) requestIds.set(orderId, crypto.randomUUID());
+  return requestIds.get(orderId)!;
+};
+
+export default function Receipt({ id, go, onExpired }: { id: string; go: GoFn; onExpired: () => void }) {
+  const order = useLoad(() => getOrder(id), onExpired, id);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState<ReceiptResponse | null>(null);
+  const sending = useRef(false);
+  const alreadyConfirmed = order.data?.status === "RECEIPT_CONFIRMED";
+
+  // Opening the page for an already confirmed order shows its saved receipt.
+  useEffect(() => {
+    if (!alreadyConfirmed) return;
+    let active = true;
+    getReceipt(id).then((receipt) => active && setSaved(receipt), () => undefined);
+    return () => { active = false; };
+  }, [alreadyConfirmed, id]);
+
+  if (order.loading && !order.data) return <Loading t="Loading order…" />;
+  if (order.error || !order.data) return <LoadError error={order.error} retry={order.reload} />;
+  const o = order.data;
+
+  const submit = async () => {
+    if (sending.current) return;
+    sending.current = true;
+    setBusy(true);
+    setError(null);
+    try {
+      setSaved(await confirmReceipt(o.id, requestIdFor(o.id)));
+    } catch (failure) {
+      if (failure instanceof ApiError && failure.status === 401) return onExpired();
+      if (failure instanceof ApiError && failure.status === 409) {
+        // Already confirmed (e.g. a retry after a lost response): show the saved receipt.
+        const existing = await getReceipt(o.id).catch(() => null);
+        if (existing) return setSaved(existing);
+      }
+      setError(failure instanceof ApiError ? errorMessage(failure) : "Connection interrupted. Your confirmation was not sent; try again.");
+    } finally {
+      sending.current = false;
+      setBusy(false);
+    }
+  };
+
+  if (saved) return (<>
     <h1>Receipt confirmed</h1>
-    <Alert k="s" t="Receipt confirmed">Your receipt is recorded separately from the driver's record. Reporting an issue does not overwrite the driver record or approve a credit.</Alert>
+    <Alert k="s" t="Receipt confirmed">Your confirmation is recorded separately from the driver&apos;s delivery record.</Alert>
     <div className="g" style={{ gridTemplateColumns: "1fr 1fr" }}>
-      <div className="card"><h2>Store confirmation</h2><Kv a="Confirmed by" b="Chamari" /><Kv a="Time" b={o.ct || "06:42"} /></div>
-      <div className="card"><h2>Driver record</h2><Kv a="Received by" b="Nimal" /><Kv a="Time" b="06:31" /></div>
+      <div className="card"><h2>Store confirmation</h2><Kv a="Order" b={shortId(saved.order_id)} /><Kv a="Confirmed" b={formatTime(saved.confirmed_at)} /></div>
+      <div className="card"><h2>Driver record</h2><Kv a="Delivered" b={formatTime(saved.delivered_at)} /></div>
     </div>
-    {(o.issues || []).map((i, k) => <Alert key={k} k="w" t={`Issue reported: ${i.type}`}>{i.p}: ordered {i.o}, driver recorded {i.r}. Note: {i.n || "—"}</Alert>)}
-    <button className="p" onClick={() => go("orders")}>Back to orders</button>
+    <button className="p" onClick={() => go("order", o.id)}>View order</button> <button onClick={() => go("orders")}>Back to orders</button>
   </>);
-  const all = lines.every((l) => l.m);
-  const hasIssue = lines.some((l) => l.m && l.m !== "ok");
+
+  if (o.status !== "DELIVERED") return (<>
+    <h1>Confirm receipt</h1>
+    <Alert k="w" t="Receipt not available">
+      Only orders the driver recorded as delivered can be confirmed. This order is currently: {o.status === "RECEIPT_CONFIRMED" ? "already confirmed" : o.status.replace(/_/g, " ").toLowerCase()}.
+    </Alert>
+    <button onClick={() => go("order", o.id)}>Back to order</button>
+  </>);
+
   return (<>
-    <h1>Confirm what arrived</h1><p className="sub">{o.id} · Delivered 06:31 by Nimal</p>
-    <Alert t="Driver's record stays unchanged">Check each line against what you received.</Alert>
-    {lines.map((l, i) => {
-      const d = l.o - l.r;
-      return (
-        <div className="card row sp" key={l.n}>
-          <div><b>{l.n}</b><div className="m">Ordered {l.o} · Driver recorded {l.r} · {d ? <b style={{ color: "var(--rd)" }}>{d} short</b> : "Match"}</div></div>
-          <div className="row">
-            {l.m === "ok" && <span className="b Confirmed">Correct</span>}
-            {l.m && l.m !== "ok" && <span className="b Needs">Issue: {l.m.type}</span>}
-            <button onClick={() => mark(i, "ok")}>Mark correct</button>
-            <button onClick={() => set({ cur: { ...l, i }, photo: false, modal: "issue" })}>Report issue</button>
-          </div>
-        </div>
-      );
-    })}
-    {S.err === "receipt" && <Alert k="e" t="Receipt not submitted">Connection interrupted. Your checks and notes are saved.</Alert>}
+    <h1>Confirm what arrived</h1>
+    <p className="sub">{shortId(o.id)} · {temperatureLabel(o.temperature_requirement)} · Delivery {formatDate(o.requested_delivery_date)}</p>
+    <Alert t="Confirm the whole delivery">Check the consignment ({o.order_weight_kg} kg, {o.order_volume_m3} m³) against what you received. Reporting shortages or damage is not available in the app yet; contact your dispatcher.</Alert>
+    {error && <Alert k="e" t="Receipt not confirmed">{error}</Alert>}
     <div className="row">
-      <button className="p" disabled={!all} onClick={submit}>{S.err === "receipt" ? "Retry" : `Submit receipt${hasIssue ? " & issue" : ""}`}</button>
+      <button className="p" disabled={busy} onClick={submit}>{busy ? "Confirming…" : error ? "Retry" : "Confirm receipt"}</button>
       <button onClick={() => go("order", o.id)}>Back</button>
     </div>
   </>);
