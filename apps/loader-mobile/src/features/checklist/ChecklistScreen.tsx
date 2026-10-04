@@ -57,8 +57,16 @@ export default function ChecklistScreen() {
     }
   };
 
-  const press = (s: Stop) => {
-    if (s.loaded) return mark(s.id, false); // tap a loaded row to undo
+    const press = (s: Stop) => {
+    if (s.loaded) {
+      const temp = s.temp.charAt(0).toLowerCase() + s.temp.slice(1);
+      return openDialog('orderDetails', undefined, {
+        body: [
+          { text: `${s.id} · Stop ${s.stop}`, tone: 'heading' },
+          { text: `${s.cartons} cartons · ${temp}${s.stop === 7 ? ' · loaded deepest' : ''}`, tone: 'dark' },
+        ],
+      });
+    }
     const onAction = (key: string) => {
       if (key === 'confirm') mark(s.id, true);
     };

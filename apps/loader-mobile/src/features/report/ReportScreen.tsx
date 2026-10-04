@@ -40,13 +40,32 @@ export default function ReportScreen() {
 
   const go = (path: string) => router.navigate(path as never);
 
-  const submit = () => {
+    const submit = () => {
     if (problem === 'short' && staged >= EXPECTED) return openDialog('checkQuantity');
     if (problem === 'missing' && staged !== 0) return openDialog('checkQuantity');
     if (problem === 'vehicle') return openDialog('reportVehicleIssue');
-    if (offline) return go('/tabs/sync-queue'); // saved locally, queued for sync
-    // TODO: POST the report to the API
-    go(action === 'hold' ? '/tabs/dispatcher-pending' : '/tabs/issue-resolved');
+
+    const problemLabel = problemTypes.find((p) => p.key === problem)?.label ?? '';
+    const actionTitle = actions.find((a) => a.key === action)?.title ?? '';
+
+    openDialog(
+      'reviewReport',
+      (key) => {
+        if (key !== 'send') return;
+        // TODO: POST the report to the API (or save it locally when offline)
+        openDialog(offline ? 'savedOffline' : 'sentToDispatcher');
+      },
+      {
+        body: [
+          { text: 'ORD0092322 · OUT027 · Milk 1L', tone: 'heading' },
+          { text: `${problemLabel} · available ${staged} of ${EXPECTED}`, tone: 'dark' },
+          { text: actionTitle, tone: 'dark' },
+          { text: 'Bay 4 photo attached · 03:12', tone: 'dark' },
+          { text: '2 crates damaged in Bay 4', tone: 'dark' },
+          { text: 'Capture time: 03:12 · Bay B-04', tone: 'small' },
+        ],
+      },
+    );
   };
 
   return (

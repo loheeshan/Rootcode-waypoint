@@ -1,1 +1,1 @@
-export { TripChecklistScreen as default } from '../../src/features/flows/moreScreens';
+export { default } from '../../src/features/flows/TripChecklistScreen';
