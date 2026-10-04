@@ -1,10 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Card } from '../../components/ui/Card';
 import { Pill } from '../../components/ui/Pill';
+import { useIsOffline } from '../../hooks/useIsOffline';
 import { t } from '../../theme/loaderTokens';
+import { useDialog } from '../dialogs/DialogProvider';
 
 const EXPECTED = 10;
 
@@ -24,6 +27,10 @@ const actions = [
 ];
 
 export default function ReportScreen() {
+  const router = useRouter();
+  const offline = useIsOffline();
+  const { openDialog } = useDialog();
+
   const [problem, setProblem] = useState<ProblemKey>('short');
   const [staged, setStaged] = useState(8);
   const [action, setAction] = useState<string>('hold');
@@ -31,9 +38,34 @@ export default function ReportScreen() {
   const shortBy = Math.max(EXPECTED - staged, 0);
   const severity = shortBy >= 2 ? 'SEVERE' : shortBy === 1 ? 'MINOR' : null;
 
-  const submit = () => {
-    // TODO: POST to API
-    Alert.alert('Report sent', 'Dispatcher has been notified.');
+  const go = (path: string) => router.navigate(path as never);
+
+    const submit = () => {
+    if (problem === 'short' && staged >= EXPECTED) return openDialog('checkQuantity');
+    if (problem === 'missing' && staged !== 0) return openDialog('checkQuantity');
+    if (problem === 'vehicle') return openDialog('reportVehicleIssue');
+
+    const problemLabel = problemTypes.find((p) => p.key === problem)?.label ?? '';
+    const actionTitle = actions.find((a) => a.key === action)?.title ?? '';
+
+    openDialog(
+      'reviewReport',
+      (key) => {
+        if (key !== 'send') return;
+        // TODO: POST the report to the API (or save it locally when offline)
+        openDialog(offline ? 'savedOffline' : 'sentToDispatcher');
+      },
+      {
+        body: [
+          { text: 'ORD0092322 · OUT027 · Milk 1L', tone: 'heading' },
+          { text: `${problemLabel} · available ${staged} of ${EXPECTED}`, tone: 'dark' },
+          { text: actionTitle, tone: 'dark' },
+          { text: 'Bay 4 photo attached · 03:12', tone: 'dark' },
+          { text: '2 crates damaged in Bay 4', tone: 'dark' },
+          { text: 'Capture time: 03:12 · Bay B-04', tone: 'small' },
+        ],
+      },
+    );
   };
 
   return (
@@ -165,7 +197,7 @@ export default function ReportScreen() {
 
       <Pressable style={({ pressed }) => [styles.cta, pressed && { opacity: 0.85 }]} onPress={submit}>
         <Ionicons name="send-outline" size={18} color="#fff" />
-        <Text style={styles.ctaText}>Send Report to Dispatcher</Text>
+        <Text style={styles.ctaText}>{offline ? 'Save Report on This Device' : 'Send Report to Dispatcher'}</Text>
       </Pressable>
     </ScrollView>
   );

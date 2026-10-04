@@ -1,1 +1,1 @@
-export { DepartureChecksScreen as default } from '../../src/features/flows/screens';
+export { default } from '../../src/features/dialogs/DepartureChecksScreen';
