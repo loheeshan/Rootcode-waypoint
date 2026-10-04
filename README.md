@@ -39,7 +39,10 @@ Planning storage supports depot/day workspaces, revisions, vehicle/driver trip
 references and ordered stops. Order outcomes can link served orders to stops or
 store deferral explanations, with database checks for reference consistency and
 one outcome per order/revision. Dispatcher plan create/list/detail now provide
-draft workspaces and saved revision counts. Allocation, full result detail and
+draft workspaces and saved revision counts. A compatibility preview checks each
+confirmed order against depot vehicles using exact-day availability, temperature,
+van-only access and individual weight/volume limits. Candidate vehicles still
+need route, fuel and combined-load validation. Allocation, full result detail and
 publishing services remain pending; see the [planning guide](apps/api/app/planning/README.md).
 Remaining business endpoints and domain tables, optimization, competition dataset imports, POD capture, offline
 outbox processing and end-to-end workflows are **not implemented**. Public starter

@@ -5,6 +5,8 @@
 Authentication, Store order create/list/detail, Dispatcher order listing, fleet
 reads, daily fleet input GET/PUT, and plan create/list/detail routes are implemented. Store receipt,
 optimization, publishing, live operations, Loader and Driver routes remain planned.
+A live, read-only plan compatibility preview is implemented for individual
+order/vehicle rules; it is not full feasibility validation or optimization.
 Migration `0005_planning_foundation` adds storage for plans, revisions, trips and
 stops. Plan workspace APIs now use this storage; allocation/publishing remain pending.
 Migration `0006_plan_outcomes` adds order result and deferral reason storage,
@@ -209,6 +211,7 @@ POST /api/v1/plans
 GET  /api/v1/plans
 POST /api/v1/plans/{plan_id}/optimize
 GET  /api/v1/plans/{plan_id}
+GET  /api/v1/plans/{plan_id}/compatibility
 POST /api/v1/plans/{plan_id}/publish
 GET  /api/v1/operations/live
 ```
@@ -519,6 +522,87 @@ Shared types: `PlanCreateRequest`, `PlanResponse`, `PlanRevisionResponse`,
 `PlanDetailResponse`, `PlanListResponse`. The plan endpoints introduced no new
 migration; at least `0006_plan_outcomes` is required for revision counts. Apply
 the current migration head listed in the root README when updating the backend.
+
+### Plan compatibility preview
+
+`GET /api/v1/plans/{plan_id}/compatibility` requires an active `DISPATCHER` bearer
+token and current access to the plan's depot. Missing and foreign plans return
+the same `404 {"detail":"Plan not found"}`. Depot grants do not bypass the role
+check; outlet grants alone do not grant access. Historical and published plans
+may be previewed, using live inputs rather than any saved revision's contents.
+
+The endpoint selects only `CONFIRMED` orders whose accepted delivery date equals
+the plan date and whose outlet currently belongs to the plan depot. `limit`
+defaults to 20 (1–100), `offset` to 0 (nonnegative). `total` counts all eligible
+orders before pagination. Order pages and vehicle lists use UUID ascending order.
+All vehicles in that depot are evaluated for each order on the page; vehicles
+from another assigned depot are excluded. The response contains:
+
+```typescript
+interface PlanCompatibilityResponse {
+  plan_id: string;
+  depot_id: string;
+  delivery_date: string;
+  is_complete_plan_validation: false;
+  items: {
+    order: DispatcherOrderResponse;
+    candidate_vehicle_ids: string[];
+    excluded_vehicles: { vehicle_id: string; reasons: CompatibilityIssue[] }[];
+  }[];
+  vehicles: { vehicle: VehicleResponse; is_available: boolean | null }[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+```
+
+Nested order/outlet/depot and vehicle shapes are the existing read DTOs above,
+including three-decimal numeric strings. Availability is outer-joined on the
+**plan's date**, with null meaning unknown, false unavailable, and true available.
+A missing record never defaults to available, and another date is never reused.
+
+For each order, candidates pass all implemented individual checks. Excluded
+vehicles include every failed check in this stable order:
+
+| `CompatibilityIssue` | Meaning |
+|---|---|
+| `DEPOT_MISMATCH` | Different vehicle/outlet home depots; normally prevented by API selection. |
+| `TEMPERATURE_MISMATCH` | Chilled order and ambient vehicle; ambient orders permit either type. |
+| `VAN_REQUIRED` | Van-only outlet and truck. |
+| `WEIGHT_CAPACITY` | Whole order weight exceeds capacity; equality is allowed. |
+| `VOLUME_CAPACITY` | Whole order volume exceeds capacity; equality is allowed. |
+| `VEHICLE_UNAVAILABLE` | Explicit false availability for the plan date. |
+| `AVAILABILITY_UNKNOWN` | Missing availability for the plan date. |
+
+Candidate/excluded lists are disjoint and cover all returned vehicles per order;
+each list is sorted by vehicle UUID. Every order is evaluated independently and
+is not split or deducted from another order's remaining capacity. Exclusions are
+not stored `DeferralReason` decisions. An empty candidate list creates no deferral.
+
+No matching orders returns `items: []`, `total: 0` and the depot's vehicles.
+An offset beyond the page range keeps the full total/vehicle list. No vehicles
+returns empty candidates and exclusions for each order. More than 500 depot
+vehicles returns 422 with `Compatibility preview supports at most 500 vehicles
+per depot`; vehicles are never silently truncated. At most 50,000 pairs are
+evaluated in one API response.
+
+`is_complete_plan_validation` is always false: candidates may still fail combined
+trip capacity, windows, distance/sequencing, weekly fuel/reservations, or trip
+limits. No complete served/deferred accounting is performed. Fuel data and saved
+trip counts are not consulted. For example, two orders can both fit individually
+while exceeding capacity together; a zero-quota vehicle can pass these checks.
+
+This is an advisory live read, not a transactionally consistent solver input
+snapshot, a reservation, or a saved-revision view. Reads/pages can observe
+concurrent input changes. Revalidate complete inputs during allocation/publishing.
+No existing plan/revision/order or fleet input is changed, and no trips/results
+are written. Successful responses use `Cache-Control: no-store`. Database failures
+return `503 {"detail":"Compatibility preview unavailable"}` without SQL details.
+Invalid IDs/pagination return 422; existing authentication failures apply.
+
+Shared exports: `CompatibilityIssue`, `VehicleExclusionResponse`,
+`OrderCompatibilityResponse`, `CompatibilityVehicleResponse`, `PlanCompatibilityResponse`.
+This increment adds no migration; apply `0007_fleet_operations` for availability.
 
 ## Loader
 

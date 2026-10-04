@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 from app.auth.dependencies import require_roles
 from app.auth.models import RoleCode, User
 from app.db.session import get_session
+from app.planning.compatibility_schemas import PlanCompatibilityResponse
+from app.planning.compatibility_service import preview_compatibility
 from app.planning.models import PlanStatus
 from app.planning.schemas import PlanCreateRequest, PlanDetailResponse, PlanListResponse
 from app.planning.service import (
@@ -103,5 +105,23 @@ def get_plan_detail(
         result = get_plan(session, user, plan_id)
     except SQLAlchemyError:
         raise unavailable() from None
+    response.headers["Cache-Control"] = "no-store"
+    return result
+
+
+@router.get("/{plan_id}/compatibility", response_model=PlanCompatibilityResponse)
+def get_plan_compatibility(
+    plan_id: UUID,
+    response: Response,
+    user: DispatcherUser,
+    session: Database,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> PlanCompatibilityResponse:
+    try:
+        result = preview_compatibility(session, user, plan_id, limit=limit, offset=offset)
+    except SQLAlchemyError:
+        raise HTTPException(status_code=503, detail="Compatibility preview unavailable",
+                            headers={"Cache-Control": "no-store"}) from None
     response.headers["Cache-Control"] = "no-store"
     return result
