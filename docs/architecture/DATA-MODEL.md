@@ -13,6 +13,8 @@ supporting unique indexes on orders, trips and stops. All 13 earlier tables and
 records are preserved; no outcomes are inserted.
 Migration `0007_fleet_operations` adds empty `vehicle_availability` and
 `vehicle_fuel_usage` tables, preserving all 15 earlier tables and records.
+Migrations `0008` and `0009` add optimization snapshots and publication/reservation
+storage, described below.
 The other tables in the core table list remain planned.
 
 ### Optimization snapshots
@@ -35,8 +37,28 @@ trip/stop/assignment rows remain the relational references.
 
 Downgrading to `0007_fleet_operations` removes replay keys and snapshots but retains
 the revisions, routes and outcomes. This loses retry protection and historical
-input evidence, so rollback testing must use a disposable database. Publication,
-driver assignment and authoritative fuel reservation storage remain pending.
+input evidence, so rollback testing must use a disposable database.
+
+### Publications and fuel reservations
+
+Migration `0009_plan_publications` preserves all 18 earlier application tables and adds:
+
+| Table / index | Stored fields and constraints |
+|---|---|
+| `plan_publications` | UUID `request_id` primary key (replay key); unique required `plan_id` and `plan_revision_id`; `request_hash` (64-character SHA-256); required `published_by` user; timezone-aware `published_at`; JSON `result_snapshot`. All FKs `RESTRICT`. |
+| `fuel_reservations` | UUID `id`; unique `trip_id`; `vehicle_id`; `service_date` (`DATE`, Colombo); `fuel_l` `NUMERIC(12, 3)` from 0 to below 1,000,000,000; database-default `created_at`. Composite FK `(trip_id, vehicle_id)` to trips, indexed by `(vehicle_id, service_date)`. |
+| `uq_plan_revisions_one_published` | Partial unique index on `plan_revisions(plan_id)` where `status = 'PUBLISHED'`. |
+| `uq_trips_id_vehicle` | Unique `(id, vehicle_id)` target for the reservation FK. |
+
+The publication row identifies the effective published revision. The publish service
+writes it, trip drivers, reservations, revision/plan status and order statuses in
+one transaction. Reservations are counted for service dates from today onward;
+earlier days use consumed daily totals, so no release column is needed. Published
+trips without reservations are treated as inconsistent and block planning.
+Republication is not supported. Downgrading to `0008_plan_optimizations` drops both
+tables and indexes but keeps published revisions, drivers and order statuses;
+re-upgrading leaves those published trips without reservations, which then block
+planning for that week. Test rollback only on disposable databases.
 
 ### Identity
 

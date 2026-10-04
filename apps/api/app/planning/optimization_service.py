@@ -1,7 +1,7 @@
 import hashlib
 import json
 from dataclasses import asdict
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID, uuid4
 
@@ -26,6 +26,7 @@ from app.planning.optimization_schemas import (
     SavedTripResponse,
 )
 from app.planning.optimizer import optimize_draft
+from app.planning.publication_models import FuelReservation
 from app.planning.route_inputs import (
     LOCAL_ZONE,
     RouteInputs,
@@ -49,6 +50,60 @@ def scoped_plan(session: Session, user: User, plan_id: UUID, *, lock: bool = Fal
     return plan
 
 
+def consumed_fuel(
+    session: Session, vehicle_ids: list[UUID], week_start: date, today: date
+) -> dict[UUID, Decimal]:
+    """Authoritative consumed totals for Monday through today; missing days are unknown."""
+    last = min(today, week_start + timedelta(days=6))
+    days = [week_start + timedelta(days=i) for i in range(max(0, (last - week_start).days + 1))]
+    rows = {
+        (row.vehicle_id, row.usage_date): row.fuel_used_l
+        for row in session.scalars(
+            select(VehicleFuelUsage).where(
+                VehicleFuelUsage.vehicle_id.in_(vehicle_ids),
+                VehicleFuelUsage.usage_date.between(week_start, last),
+            )
+        )
+    }
+    if any((vehicle_id, day) not in rows for vehicle_id in vehicle_ids for day in days):
+        raise fail(422, "Record daily fuel totals from Monday through today before planning")
+    return {
+        vehicle_id: sum((rows[vehicle_id, day] for day in days), Decimal(0))
+        for vehicle_id in vehicle_ids
+    }
+
+
+def reserved_fuel(
+    session: Session, vehicle_ids: list[UUID], week_start: date, today: date
+) -> dict[UUID, Decimal]:
+    """Published reservations for today and later; earlier days are consumed totals."""
+    week_end = week_start + timedelta(days=6)
+    unreserved = session.scalar(
+        select(Trip.id)
+        .join(PlanRevision, Trip.plan_revision_id == PlanRevision.id)
+        .join(Plan, PlanRevision.plan_id == Plan.id)
+        .outerjoin(FuelReservation, FuelReservation.trip_id == Trip.id)
+        .where(
+            Trip.vehicle_id.in_(vehicle_ids),
+            PlanRevision.status == PlanStatus.PUBLISHED,
+            Plan.delivery_date.between(week_start, week_end),
+            FuelReservation.id.is_(None),
+        )
+        .limit(1)
+    )
+    if unreserved is not None:
+        raise fail(409, "Published fleet work without fuel reservations blocks planning")
+    totals = dict.fromkeys(vehicle_ids, Decimal(0))
+    for reservation in session.scalars(
+        select(FuelReservation).where(
+            FuelReservation.vehicle_id.in_(vehicle_ids),
+            FuelReservation.service_date.between(max(today, week_start), week_end),
+        )
+    ):
+        totals[reservation.vehicle_id] += reservation.fuel_l
+    return totals
+
+
 def get_optimization(
     session: Session, user: User, plan_id: UUID, revision_id: UUID
 ) -> OptimizationResponse:
@@ -63,14 +118,10 @@ def get_optimization(
     return OptimizationResponse.model_validate(record.result_snapshot)
 
 
-def _load_inputs(
-    session: Session, plan: Plan, payload: OptimizeRequest, now: datetime
-) -> tuple[list[CompatibilityOrder], list[CompatibilityVehicle], RouteInputs]:
-    today = now.astimezone(LOCAL_ZONE).date()
-    if plan.delivery_date < today:
-        raise fail(422, "Cannot optimize a past delivery date")
-    if plan.delivery_date.year > 9998:
-        raise fail(422, "Delivery date is outside the optimizer calendar range")
+def lock_depot_inputs(
+    session: Session, plan: Plan
+) -> tuple[list[tuple[Order, Outlet]], list[Vehicle]]:
+    """Lock eligible orders/outlets, then depot vehicles in UUID order (callers lock the depot)."""
     rows = session.execute(
         select(Order, Outlet)
         .join(Outlet, Order.outlet_id == Outlet.id)
@@ -94,6 +145,65 @@ def _load_inputs(
         raise fail(
             422, "Synchronous optimization supports at most 100 orders and 20 depot vehicles"
         )
+    return [(order, outlet) for order, outlet in rows], list(fleet)
+
+
+def load_availability(
+    session: Session, fleet: list[Vehicle], day: date
+) -> dict[tuple[UUID, date], bool]:
+    """Plan-day and following-day records; a missing key means unknown."""
+    return {
+        (row.vehicle_id, row.availability_date): row.is_available
+        for row in session.scalars(
+            select(VehicleAvailability).where(
+                VehicleAvailability.vehicle_id.in_([vehicle.id for vehicle in fleet]),
+                VehicleAvailability.availability_date.in_([day, day + timedelta(days=1)]),
+            )
+        )
+    }
+
+
+def compatibility_inputs(
+    rows: list[tuple[Order, Outlet]],
+    fleet: list[Vehicle],
+    availability: dict[tuple[UUID, date], bool],
+    day: date,
+) -> tuple[list[CompatibilityOrder], list[CompatibilityVehicle]]:
+    orders = [
+        CompatibilityOrder(
+            order.id,
+            outlet.depot_id,
+            TemperatureRequirement(order.temperature_requirement),
+            ParkingConstraint(outlet.parking_constraint),
+            order.order_weight_kg,
+            order.order_volume_m3,
+        )
+        for order, outlet in rows
+    ]
+    vehicles = [
+        CompatibilityVehicle(
+            vehicle.id,
+            vehicle.depot_id,
+            VehicleType(vehicle.type),
+            TemperatureType(vehicle.temperature_type),
+            vehicle.weight_cap_kg,
+            vehicle.volume_cap_m3,
+            availability.get((vehicle.id, day)),
+        )
+        for vehicle in fleet
+    ]
+    return orders, vehicles
+
+
+def _load_inputs(
+    session: Session, plan: Plan, payload: OptimizeRequest, now: datetime
+) -> tuple[list[CompatibilityOrder], list[CompatibilityVehicle], RouteInputs]:
+    today = now.astimezone(LOCAL_ZONE).date()
+    if plan.delivery_date < today:
+        raise fail(422, "Cannot optimize a past delivery date")
+    if plan.delivery_date.year > 9998:
+        raise fail(422, "Delivery date is outside the optimizer calendar range")
+    rows, fleet = lock_depot_inputs(session, plan)
     services = {item.outlet_id: item.service_seconds for item in payload.services}
     shifts = {item.vehicle_id: item for item in payload.shifts}
     outlet_map = {outlet.id: outlet for _, outlet in rows}
@@ -106,17 +216,7 @@ def _load_inputs(
         raise fail(
             422, "Travel inputs must contain every directed eligible outlet/depot pair exactly"
         )
-    availability = {
-        (row.vehicle_id, row.availability_date): row.is_available
-        for row in session.scalars(
-            select(VehicleAvailability).where(
-                VehicleAvailability.vehicle_id.in_([vehicle.id for vehicle in fleet]),
-                VehicleAvailability.availability_date.in_(
-                    [plan.delivery_date, plan.delivery_date + timedelta(days=1)]
-                ),
-            )
-        )
-    }
+    availability = load_availability(session, fleet, plan.delivery_date)
     if rows and any((vehicle.id, plan.delivery_date) not in availability for vehicle in fleet):
         raise fail(422, "Record plan-day availability for every depot vehicle before optimization")
     available = [
@@ -127,41 +227,11 @@ def _load_inputs(
     if set(shifts) != {vehicle.id for vehicle in available}:
         raise fail(422, "Shift inputs must match every available depot vehicle exactly")
     week_start = plan.delivery_date - timedelta(days=plan.delivery_date.weekday())
-    week_end = week_start + timedelta(days=6)
-    # Reservations are introduced by the next publisher increment. Until then,
-    # zero is safe only when there is no published work for these vehicles/week.
-    published = session.scalar(
-        select(Trip.id)
-        .join(PlanRevision, Trip.plan_revision_id == PlanRevision.id)
-        .join(Plan, PlanRevision.plan_id == Plan.id)
-        .where(
-            Trip.vehicle_id.in_([vehicle.id for vehicle in available]),
-            PlanRevision.status == PlanStatus.PUBLISHED,
-            Plan.delivery_date.between(week_start, week_end),
-        )
-        .limit(1)
-    )
-    if published is not None:
-        raise fail(409, "Published fleet work requires reservation accounting before optimization")
-    fuel_rows = {
-        (row.vehicle_id, row.usage_date): row.fuel_used_l
-        for row in session.scalars(
-            select(VehicleFuelUsage).where(
-                VehicleFuelUsage.vehicle_id.in_([vehicle.id for vehicle in available]),
-                VehicleFuelUsage.usage_date.between(week_start, min(today, week_end)),
-            )
-        )
-    }
-    days = [
-        week_start + timedelta(days=i)
-        for i in range(max(0, (min(today, week_end) - week_start).days + 1))
-    ]
+    vehicle_ids = [vehicle.id for vehicle in available]
+    consumed = consumed_fuel(session, vehicle_ids, week_start, today)
+    reserved = reserved_fuel(session, vehicle_ids, week_start, today)
     route_vehicles = []
     for vehicle in available:
-        if any((vehicle.id, day) not in fuel_rows for day in days):
-            raise fail(
-                422, "Record daily fuel totals from Monday through today before optimization"
-            )
         shift = shifts[vehicle.id]
         if shift.earliest_departure < now:
             raise fail(422, "Earliest departure cannot be before the current time")
@@ -176,8 +246,8 @@ def _load_inputs(
                 km_per_l=vehicle.km_per_l,
                 fuel_week_start=week_start,
                 weekly_fuel_quota_l=vehicle.weekly_fuel_quota_l,
-                fuel_used_l=sum((fuel_rows[vehicle.id, day] for day in days), Decimal(0)),
-                fuel_reserved_l=Decimal(0),
+                fuel_used_l=consumed[vehicle.id],
+                fuel_reserved_l=reserved[vehicle.id],
             )
         )
     inputs = RouteInputs(
@@ -198,29 +268,7 @@ def _load_inputs(
         vehicles=tuple(route_vehicles),
         legs=payload.legs,
     )
-    orders = [
-        CompatibilityOrder(
-            order.id,
-            outlet.depot_id,
-            TemperatureRequirement(order.temperature_requirement),
-            ParkingConstraint(outlet.parking_constraint),
-            order.order_weight_kg,
-            order.order_volume_m3,
-        )
-        for order, outlet in rows
-    ]
-    vehicles = [
-        CompatibilityVehicle(
-            vehicle.id,
-            vehicle.depot_id,
-            VehicleType(vehicle.type),
-            TemperatureType(vehicle.temperature_type),
-            vehicle.weight_cap_kg,
-            vehicle.volume_cap_m3,
-            availability.get((vehicle.id, plan.delivery_date)),
-        )
-        for vehicle in fleet
-    ]
+    orders, vehicles = compatibility_inputs(rows, fleet, availability, plan.delivery_date)
     return orders, vehicles, inputs
 
 

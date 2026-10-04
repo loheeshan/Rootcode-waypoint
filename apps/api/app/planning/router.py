@@ -15,6 +15,8 @@ from app.planning.compatibility_service import preview_compatibility
 from app.planning.models import PlanStatus
 from app.planning.optimization_schemas import OptimizationResponse, OptimizeRequest
 from app.planning.optimization_service import create_optimization, get_optimization
+from app.planning.publication_schemas import PublicationResponse, PublishRequest
+from app.planning.publication_service import create_publication, get_publication
 from app.planning.routing import RouteSearchUnavailable
 from app.planning.schemas import PlanCreateRequest, PlanDetailResponse, PlanListResponse
 from app.planning.service import (
@@ -92,6 +94,62 @@ def get_optimization_result(
         raise HTTPException(
             status_code=503,
             detail="Optimization results unavailable",
+            headers={"Cache-Control": "no-store"},
+        ) from None
+    response.headers["Cache-Control"] = "no-store"
+    return result
+
+
+@router.post(
+    "/{plan_id}/revisions/{revision_id}/publish",
+    response_model=PublicationResponse,
+    status_code=201,
+    responses={200: {"model": PublicationResponse, "description": "Saved request replay"}},
+)
+def post_publication(
+    plan_id: UUID,
+    revision_id: UUID,
+    payload: PublishRequest,
+    response: Response,
+    user: DispatcherUser,
+    session: Database,
+    now: Annotated[datetime, Depends(get_planning_time)],
+) -> PublicationResponse:
+    try:
+        result, created = create_publication(session, user, plan_id, revision_id, payload, now)
+    except HTTPException:
+        session.rollback()
+        raise
+    except IntegrityError:
+        session.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Publication conflict; reload or retry the same request",
+            headers={"Cache-Control": "no-store"},
+        ) from None
+    except (SQLAlchemyError, ValueError):
+        session.rollback()
+        raise HTTPException(
+            status_code=503,
+            detail="Publication unavailable; retry with the same request ID",
+            headers={"Cache-Control": "no-store"},
+        ) from None
+    response.status_code = 201 if created else 200
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Location"] = f"/api/v1/plans/{plan_id}/publication"
+    return result
+
+
+@router.get("/{plan_id}/publication", response_model=PublicationResponse)
+def get_plan_publication(
+    plan_id: UUID, response: Response, user: DispatcherUser, session: Database
+) -> PublicationResponse:
+    try:
+        result = get_publication(session, user, plan_id)
+    except (SQLAlchemyError, ValueError):
+        raise HTTPException(
+            status_code=503,
+            detail="Publication unavailable",
             headers={"Cache-Control": "no-store"},
         ) from None
     response.headers["Cache-Control"] = "no-store"

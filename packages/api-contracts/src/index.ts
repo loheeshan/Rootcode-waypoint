@@ -221,6 +221,40 @@ export interface OptimizationResponse {
   trips: SavedTripResponse[];
   deferrals: DeferredOrderResponse[];
 }
+export interface PublishRequest {
+  request_id: string;
+  driver_assignments: { trip_id: string; driver_id: string }[];
+}
+export interface PublishedTripResponse {
+  trip_id: string;
+  vehicle_id: string;
+  trip_number: number;
+  driver_id: string;
+  departure_at: string;
+  return_at: string;
+  fuel_l: string;
+}
+export interface FuelBalanceResponse {
+  vehicle_id: string;
+  week_start: string;
+  weekly_quota_l: string;
+  consumed_l: string;
+  reserved_l: string;
+  remaining_l: string;
+}
+export interface PublicationResponse {
+  request_id: string;
+  plan_id: string;
+  revision_id: string;
+  revision_number: number;
+  published_at: string;
+  published_by: string;
+  validation: 'REVALIDATED_AT_PUBLISH';
+  served_order_count: number;
+  deferred_order_count: number;
+  trips: PublishedTripResponse[];
+  fuel_balances: FuelBalanceResponse[];
+}
 export class ApiError extends Error {
   constructor(public readonly status: number, message: string) { super(message); this.name = 'ApiError'; }
 }

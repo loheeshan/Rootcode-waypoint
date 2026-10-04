@@ -8,9 +8,11 @@ from app.orders.models import Order
 from app.planning.assignment_models import DeferralDecision, PlanAssignment
 from app.planning.models import Plan, PlanRevision, Trip, TripStop
 from app.planning.optimization_models import PlanOptimization
+from app.planning.publication_models import FuelReservation, PlanPublication
 
 __all__ = [
-    "Base", "DeferralDecision", "Depot", "Order", "Outlet", "Plan", "PlanAssignment",
-    "PlanOptimization", "PlanRevision", "Role", "Trip", "TripStop", "User",
-    "UserDepot", "UserOutlet", "UserRole", "Vehicle", "VehicleAvailability", "VehicleFuelUsage",
+    "Base", "DeferralDecision", "Depot", "FuelReservation", "Order", "Outlet", "Plan",
+    "PlanAssignment", "PlanOptimization", "PlanPublication", "PlanRevision", "Role", "Trip",
+    "TripStop", "User", "UserDepot", "UserOutlet", "UserRole", "Vehicle", "VehicleAvailability",
+    "VehicleFuelUsage",
 ]
