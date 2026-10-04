@@ -7,8 +7,8 @@ Never record passwords, tokens or `.env` contents here.
 
 | Step | Branch | Base | Status |
 |---|---|---|---|
-| 1 Demo foundation | `feature/integration-demo-foundation` | `dev` `be6967e` (all backend batches incl. #201) | In review |
-| 2 Auth (Store, Loader, Driver) | `feature/integration-demo-auth` | Step 1 | Next |
+| 1 Demo foundation | `feature/integration-demo-foundation` | `dev` `be6967e` (all backend batches incl. #201) | Done (`aa3add7`, merged #202) |
+| 2 Auth (Store, Loader, Driver) | `feature/integration-demo-auth` | `dev` `68db449` | In review |
 | 3 Store web | `feature/integration-store-web` | Step 2 | Pending |
 | 4 Dispatcher web | `feature/integration-dispatcher-web` | — | **Deferred**: frontend team still building Dispatcher web |
 | 5 Loader online | `feature/integration-loader-mobile` | Step 3 | Pending |
@@ -100,7 +100,74 @@ For a phone, also allow inbound TCP 8000 on the PC firewall and keep both on one
 - Loading and delivery are per order (weight/volume/temperature); there are no SKU/carton counts.
 - Dispatcher web connection (Step 4) is deferred at the user's request.
 
+## Step 2: real login (Store web, Loader and Driver mobile)
+
+- Shared `signIn()` in `@waypoint/api-contracts`: `POST /auth/login`, requires the app's role
+  and reports `invalid-credentials`, `wrong-role`, `unavailable` or `network` separately.
+- Web session: Next.js routes `/api/session` (POST sign-in, GET `/me`, DELETE sign-out) keep
+  the API token in an httpOnly `SameSite=Strict` cookie; browser code never sees it. The
+  cookie is `Secure` over HTTPS, behind a TLS proxy that sends `X-Forwarded-Proto: https`, or
+  when `SESSION_COOKIE_SECURE=true`. `/api/backend/*` proxies to FastAPI with the bearer token,
+  rejects `.`, `..` and empty path segments, and requires `X-Waypoint-Client: web` on writes;
+  `/api/session` POST/DELETE require it too (blocks cross-site login/logout). "Keep me signed
+  in" sets the cookie lifetime to the token lifetime; otherwise it is a browser-session cookie.
+  There is no refresh token and no revocation endpoint: sign-out removes the cookie or stored
+  token, and the token itself stays valid until it expires (30 minutes by default).
+- `API_INTERNAL_URL` (Compose: `http://api:8000/api/v1`) is the server-side API base for the
+  web container; local `next dev`/`start` fall back to `NEXT_PUBLIC_API_URL`.
+- Mobile: `AuthProvider` per app; the token and last confirmed profile are stored in
+  SecureStore only when "Remember on this phone/device" is checked, otherwise kept in memory.
+  On relaunch `/me` confirms the session; a 401 clears it ("session expired"). Without
+  connectivity a remembered session continues **offline and unverified** from the cached
+  profile so cached work stays reachable; it is re-checked with `/me` when NetInfo reports a
+  connection, and any API 401 signs out. `AuthGate` redirects protected deep links to sign-in
+  once signed out (a protected screen can render briefly while the first check runs). End
+  shift (Driver: Profile -> End shift; Loader: profile -> End shift and sign out) signs out
+  and keeps local records.
+- Driver badge/PIN and Loader bay-lead/PIN mocks were replaced by email/password. Biometric
+  and NFC buttons are hidden (no backend support); password reset shows an honest note.
+  Development builds show the demo email as a one-tap fill; the password is always checked.
+  The Driver login no longer shows the mock vehicle card, "Pre-Trip Ready" or device label
+  (they were static data); this differs from the design and needs design sign-off. Old PIN,
+  biometric and reset-PIN screens remain in both apps but are no longer linked from sign-in.
+- The Store mock "Expire session" demo control was removed: it changed UI state only while
+  the real cookie stayed valid.
+- Dispatcher login is not connected (deferred with Step 4).
+
+Verification (production web build on a disposable database with a generated test password):
+
+| Check | Result |
+|---|---|
+| Store: wrong password | PASS: "Email or password is incorrect.", no navigation |
+| Store: valid Dispatcher account on Store app | PASS: "This account does not have access to this app.", no cookie |
+| Store: sign-in -> Store home, `/me` STORE_MANAGER with 1 outlet | PASS |
+| Store: real read `GET /store/orders` via proxy | PASS (200); Dispatcher endpoint 403; write without client header 403 |
+| Store: token readable by page scripts | PASS (not readable) |
+| Store: reload keeps session; sign-out clears it; `/store` then shows sign-in | PASS |
+| Store: token expiry (1-minute test tokens) | PASS: remembered cookie expires with the token; session cookie shows "Your session has expired" |
+| Store after review hardening (rebuilt) | PASS: login/read/sign-out with the client header; header-less login POST 403 |
+| Route tests (`apps/web/tests/session-routes.test.ts`) | PASS: cookie flags, Secure via `X-Forwarded-Proto`, CSRF header, failure mapping, expiry, sign-out, proxy path/header/Location rules |
+| Driver/Loader native sign-in on emulator/device | NOT RUN (see below) |
+| Shared + web tests (`pnpm test`) | PASS 20/20 (7 sign-in, 5 session/proxy route tests) |
+| Web typecheck/build, Loader typecheck, both mobile exports | PASS |
+| `pnpm lint` | Pre-existing 9 errors remain (13 before; Driver `index.tsx` rewrite fixed 4); none in Step 2 files |
+| Driver typecheck | Pre-existing `TurnByTurnCard.tsx` icon errors only |
+
+Mobile NOT RUN: Android virtual devices exist on this machine but running the apps needs
+Expo Go on the emulator. Manual check with your API running and demo data seeded:
+
+1. Set `EXPO_PUBLIC_API_URL=http://10.0.2.2:8000/api/v1` in each app's `.env`.
+2. Start an emulator from Android Studio, then `corepack pnpm dev:driver` and press `a`.
+3. Sign in as `driver@waypoint.demo` (wrong password, `loader@waypoint.demo` wrong role,
+   correct password -> Today); kill and relaunch (remembered -> Today; unchecked -> sign-in);
+   relaunch in airplane mode while remembered (-> Today, offline), then reconnect;
+   Profile -> End shift -> sign-in screen.
+4. Repeat with `corepack pnpm dev:loader` and `loader@waypoint.demo` (Welcome -> Start shift).
+
+Known: the frontend team's Dispatcher sidebar/header now also renders around `/store`
+(from `dev`); not changed here.
+
 ## Next step
 
-Step 2 on `feature/integration-demo-auth`: real login for Store (web), Loader and Driver
-(mobile). Dispatcher login stays with the Dispatcher web work.
+Step 3 on `feature/integration-store-web`: connect Store orders, tracking and receipts to the
+API through `/api/backend`. Dispatcher login and Step 4 stay deferred.

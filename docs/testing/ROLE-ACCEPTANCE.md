@@ -7,8 +7,8 @@ Use the real FastAPI/PostgreSQL backend; mocked responses do not count. Never re
 
 | Flow | Expected | Result |
 |---|---|---|
-| Login screen -> `/me` | STORE_MANAGER, Store outlet scope, lands on Store orders | NOT RUN |
-| Wrong password / wrong role / logout / expired session | Error shown, no navigation; protected routes redirect | NOT RUN |
+| Login screen -> `/me` | STORE_MANAGER, Store outlet scope, lands on Store home | PASS (Step 2, production build, disposable DB) |
+| Wrong password / wrong role / logout / expired session | Error shown, no navigation; protected routes redirect | PASS (Step 2) |
 | Create order (before/after 16:00 Colombo) | Persisted; accepted date and cutoff message from the server | NOT RUN |
 | List/detail after reload | Same order, server status | NOT RUN |
 | Delivered order -> confirm receipt (retry/double click) | One receipt; `RECEIPT_CONFIRMED` | NOT RUN |

@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import AppShell from "./AppShell";
 import Auth from "./Auth";
@@ -9,10 +9,40 @@ import IssueModal from "./IssueModal";
 import { Alert, Kv, Empty, OrderCard, Modal } from "./ui";
 import { P, DEF, init, totals, lineList } from "../data/mock";
 import type { State, SetFn, GoFn, PatchFn, Issue } from "../data/mock";
+import { signInMessages, type AuthUser } from "@waypoint/api-contracts";
+import { currentSession, webSignOut } from "@/lib/auth-client";
 
 export default function Waypoint() {
   const [S, setS] = useState<State>(init);
   const set: SetFn = (p) => setS((s) => ({ ...s, ...(typeof p === "function" ? p(s) : p) }));
+  const [, setUser] = useState<AuthUser | null>(null);
+  const [checking, setChecking] = useState(true);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  // The server session (httpOnly cookie) decides whether the user is signed in, also on reload.
+  useEffect(() => {
+    let active = true;
+    currentSession("STORE_MANAGER").then((result) => {
+      if (!active) return;
+      if (result.status === "signed-in") {
+        setUser(result.user);
+        setS((s) => ({ ...s, signed: true, expired: false }));
+      } else if (result.status === "expired") {
+        setS((s) => ({ ...s, signed: false, expired: true }));
+      } else if (result.status !== "signed-out") {
+        setNotice(signInMessages[result.status]);
+      }
+      setChecking(false);
+    });
+    return () => { active = false; };
+  }, []);
+
+  const signOut = async () => {
+    await webSignOut();
+    setUser(null);
+    setNotice(null);
+    set({ signed: false, expired: false });
+  };
   const go: GoFn = (route, id = null) => set({ route, id, modal: null, err: null });
   const patch: PatchFn = (id, f) => set((s) => ({ orders: s.orders.map((o) => (o.id === id ? { ...o, ...(typeof f === "function" ? f(o) : f) } : o)) }));
   const date = S.late ? "Wednesday 30 September" : "Tuesday 29 September";
@@ -20,7 +50,8 @@ export default function Waypoint() {
   const t = totals(S.q);
   const order = S.orders.find((o) => o.id === S.id);
 
-  if (!S.signed) return <Auth S={S} set={set} />;
+  if (checking) return <div style={{ width: "100%" }}><div className="sig card"><p className="m">Checking your session…</p></div></div>;
+  if (!S.signed) return <Auth S={S} set={set} notice={notice} onSignedIn={(user) => { setUser(user); setNotice(null); }} />;
 
   const setQ = (k: string, n: number) => set((s) => ({ qerr: n > 99, q: { ...s.q, [k]: Math.min(99, Math.max(0, n)) } }));
 
@@ -143,7 +174,7 @@ export default function Waypoint() {
     view = (<><h1>Settings</h1>
       <div className="card"><h2>My profile</h2><Kv a="Name" b="Chamari" /><Kv a="Outlet" b="OUT017 · Fresh · Colombo 03" /></div>
       <div className="card"><h2>Notifications</h2>{["Delivery ETA updates", "Delivery moved", "Receipt reminders"].map((x) => <label className="kv" key={x}><span>{x}</span><input type="checkbox" defaultChecked /></label>)}</div>
-      <button className="d" onClick={() => set({ signed: false, expired: false })}>Sign out</button></>);
+      <button className="d" onClick={signOut}>Sign out</button></>);
   } else if (r === "daily") {
     view = (<><h1>Daily replenishment</h1><p className="sub">Fresh outlet · order before 16:00 each day.</p>
       <div className="card">Dry / ambient and Chilled are placed through one flow and handled as separate logistics orders.<br /><br /><button className="p" onClick={() => go("new")}>Start today's order</button></div></>);

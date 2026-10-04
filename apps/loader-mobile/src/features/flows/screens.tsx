@@ -47,7 +47,7 @@ export function ProfileScreen() {
         label="Sync status"
         onPress={() => go(offline ? '/tabs/sync-queue' : '/tabs/synced')}
       />
-      <ActionButton variant="secondary" label="End shift and sign out" onPress={() => {}} />
+      <ActionButton variant="secondary" label="End shift and sign out" onPress={() => go('/end-shift')} />
     </Screen>
   );
 }

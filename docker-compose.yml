@@ -46,6 +46,9 @@ services:
       dockerfile: apps/web/Dockerfile
       args:
         NEXT_PUBLIC_API_URL: "http://localhost:${API_PORT:-8000}/api/v1"
+    environment:
+      # Server-side session routes reach the API by service name, not the browser's localhost.
+      API_INTERNAL_URL: "http://api:8000/api/v1"
     ports:
       - "${WEB_PORT:-3000}:3000"
     depends_on:

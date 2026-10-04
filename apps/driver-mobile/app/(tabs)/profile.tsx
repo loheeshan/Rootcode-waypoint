@@ -1,9 +1,9 @@
 import { ProfileScreen } from "../../src/features/profile/ProfileScreen";
 import { mockProfile } from "../../src/features/profile/mockData";
 import { useRouter } from "expo-router";
-const router = useRouter();
 
 export default function Profile() {
+  const router = useRouter();
   return (
     <ProfileScreen
       data={mockProfile}
@@ -11,10 +11,8 @@ export default function Profile() {
       onNotifications={() => router.push("/notifications")}
       onVehicleDetails={() => router.push("/vehicle-shift")}
       onHelp={() => console.log("help and dispatcher contact")}
-      onEndShift={() => {
-        // TODO(feature/driver-api-integration): confirm, check the outbox is empty, then clear the session
-        console.log("end shift");
-      }}
+      // The end-shift screen confirms, keeps unsynced records and clears the session.
+      onEndShift={() => router.push("/end-shift")}
     />
   );
 }

@@ -3,17 +3,18 @@ import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { EndShiftModal } from '../src/components/modals/EndShiftModal';
 import { popupColors } from '../src/theme/popupTokens';
+import { LOGIN, useAuth } from '../src/services/auth';
 
 export default function EndShiftScreen() {
   const router = useRouter();
+  const { signOut } = useAuth();
   const [visible, setVisible] = useState(true);
 
-  const handleSignOut = () => {
-    // TODO(feature/loader-api-integration): delete the session token from SecureStore.
-    // Keep the saved trips and the outbox in Expo SQLite, because the popup says
-    // "Any local queue remains saved on this device for the next authorised sign-in".
+  const handleSignOut = async () => {
+    // Deletes the SecureStore token; the local queue stays in Expo SQLite for the next sign-in.
     setVisible(false);
-    router.replace('/'); // use '/login' if the Loader app has a login route
+    await signOut();
+    router.replace(LOGIN);
   };
 
   const handleKeepWorking = () => {

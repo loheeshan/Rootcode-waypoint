@@ -24,7 +24,6 @@ export default function Sidebar({ route, go, S, set }: { route: string; go: GoFn
         {flag("off", "Offline")}
         {flag("fail", "Fail next submit")}
         {flag("loadFail", "Orders load failure")}
-        <button onClick={() => set({ signed: false, expired: true })}>Expire session</button>
       </div>
     </aside>
   );

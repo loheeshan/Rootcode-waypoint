@@ -569,6 +569,38 @@ export interface ApiResponse<T> {
   etag: string | null;
   location: string | null;
 }
+/** Why a sign-in attempt failed; each needs a different message and next step. */
+export type SignInFailure = 'invalid-credentials' | 'wrong-role' | 'unavailable' | 'network';
+export class SignInError extends Error {
+  constructor(public readonly reason: SignInFailure) { super('Sign-in failed: ' + reason); this.name = 'SignInError'; }
+}
+export const signInMessages: Record<SignInFailure, string> = {
+  'invalid-credentials': 'Email or password is incorrect.',
+  'wrong-role': 'This account does not have access to this app.',
+  unavailable: 'Sign-in is temporarily unavailable. Try again shortly.',
+  network: 'Cannot reach the Waypoint server. Check your connection and try again.',
+};
+/**
+ * POST /auth/login and require `role` in the returned user. The role only restricts which
+ * app may use the session; the server still authorizes every request. Stores nothing.
+ */
+export async function signIn(baseUrl: string, email: string, password: string, role: Role): Promise<LoginResponse> {
+  let response: Response;
+  try {
+    response = await fetch(baseUrl.replace(/\/$/, '') + '/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password } satisfies LoginRequest),
+    });
+  } catch {
+    throw new SignInError('network');
+  }
+  if (response.status === 401 || response.status === 422) throw new SignInError('invalid-credentials');
+  if (!response.ok) throw new SignInError('unavailable');
+  const body = await response.json() as LoginResponse;
+  if (!body.user.is_active || !body.user.roles.includes(role)) throw new SignInError('wrong-role');
+  return body;
+}
 /** Tokens are provided by the caller; this module never stores credentials. */
 export function createApiClient(baseUrl: string, getToken?: () => Promise<string | null>) {
   const base = baseUrl.replace(/\/$/, '');

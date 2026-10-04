@@ -14,13 +14,15 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { L } from "../../../theme/loginColors";
 import { LoginHeader } from "./LoginHeader";
 import { LabeledField } from "./LabeledField";
-import { VehicleCard } from "./VehicleCard";
 
 type Props = {
-  onSubmit: (driverId: string, pin: string, remember: boolean) => void;
+  onSubmit: (email: string, password: string, remember: boolean) => void;
+  /** Optional; hidden unless a real implementation is supplied. */
   onBiometric?: () => void;
   onNfc?: () => void;
-  onForgotPin?: () => void;
+  onForgotPassword?: () => void;
+  /** Development-only demo account email offered as a one-tap fill. */
+  demoEmail?: string | null;
   loading?: boolean;
   error?: string | null;
 };
@@ -29,17 +31,18 @@ export function LoginScreen({
   onSubmit,
   onBiometric,
   onNfc,
-  onForgotPin,
+  onForgotPassword,
+  demoEmail = null,
   loading = false,
   error = null,
 }: Props) {
-  const [driverId, setDriverId] = useState("");
-  const [pin, setPin] = useState("");
-  const [showPin, setShowPin] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(true);
 
-  const idValid = /^DRV-\d{4}$/i.test(driverId.trim());
-  const canSubmit = idValid && pin.length >= 4 && !loading;
+  const emailValid = /^\S+@\S+\.\S+$/.test(email.trim());
+  const canSubmit = emailValid && password.length > 0 && !loading;
 
   return (
     <KeyboardAvoidingView
@@ -55,64 +58,56 @@ export function LoginScreen({
         <LoginHeader />
 
         <View style={styles.body}>
-          <LabeledField label="DRIVER ID / BADGE NO." rightLabel="Verified RFID ID">
-            <MaterialCommunityIcons
-              name="card-account-details-outline"
-              size={20}
-              color={L.muted}
-            />
+          <LabeledField label="WORK EMAIL">
+            <MaterialCommunityIcons name="email-outline" size={20} color={L.muted} />
             <TextInput
               style={styles.input}
-              value={driverId}
-              onChangeText={setDriverId}
-              placeholder="DRV-0000"
+              value={email}
+              onChangeText={setEmail}
+              placeholder="you@company.com"
               placeholderTextColor="#B5BBD0"
-              autoCapitalize="characters"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoComplete="email"
+              textContentType="username"
               autoCorrect={false}
-              maxLength={8}
             />
-            {idValid ? (
+            {emailValid ? (
               <Ionicons name="checkmark-circle" size={22} color={L.green} />
             ) : null}
           </LabeledField>
 
           <LabeledField
-            label="SHIFT PIN / PASSCODE"
-            rightLabel="Forgot PIN?"
-            onRightPress={onForgotPin}
+            label="PASSWORD"
+            rightLabel={onForgotPassword ? "Forgot password?" : undefined}
+            onRightPress={onForgotPassword}
           >
             <Ionicons name="lock-closed-outline" size={20} color={L.muted} />
             <TextInput
               style={styles.input}
-              value={pin}
-              onChangeText={setPin}
-              placeholder="••••"
+              value={password}
+              onChangeText={setPassword}
+              placeholder="Password"
               placeholderTextColor="#B5BBD0"
-              secureTextEntry={!showPin}
-              keyboardType="number-pad"
-              maxLength={6}
+              secureTextEntry={!showPassword}
+              autoCapitalize="none"
+              autoComplete="password"
+              textContentType="password"
+              autoCorrect={false}
             />
-            <Pressable onPress={() => setShowPin((s) => !s)} hitSlop={10}>
+            <Pressable
+              onPress={() => setShowPassword((s) => !s)}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel={showPassword ? "Hide password" : "Show password"}
+            >
               <Ionicons
-                name={showPin ? "eye-off-outline" : "eye-outline"}
+                name={showPassword ? "eye-off-outline" : "eye-outline"}
                 size={22}
                 color={L.muted}
               />
             </Pressable>
           </LabeledField>
-
-          <View style={styles.unitHeader}>
-            <Text style={styles.unitLabel}>ASSIGNED TRANSPORT UNIT</Text>
-            <View style={styles.ready}>
-              <Text style={styles.readyText}>● Pre-Trip Ready</Text>
-            </View>
-          </View>
-          <VehicleCard
-            plate="VEH018"
-            depot="Fresh Colombo"
-            chamber="Chamber -18°C"
-            capacity="24 Chill Cartons"
-          />
 
           <View style={styles.rememberRow}>
             <Pressable
@@ -126,13 +121,12 @@ export function LoginScreen({
               </View>
               <Text style={styles.rememberText}>Remember on this phone</Text>
             </Pressable>
-            <Text style={styles.device}>Rugged PNA Device</Text>
           </View>
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
           <Pressable
-            onPress={() => canSubmit && onSubmit(driverId.trim(), pin, remember)}
+            onPress={() => canSubmit && onSubmit(email.trim(), password, remember)}
             disabled={!canSubmit}
             style={({ pressed }) => [
               styles.cta,
@@ -146,11 +140,27 @@ export function LoginScreen({
             {!loading ? <Ionicons name="arrow-forward" size={18} color="#fff" /> : null}
           </Pressable>
 
+          {demoEmail ? (
+            <Pressable
+              onPress={() => setEmail(demoEmail)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={`Fill demo email ${demoEmail}`}
+            >
+              <Text style={styles.rememberText}>
+                Demo: use {demoEmail} with the password set when demo accounts were seeded
+              </Text>
+            </Pressable>
+          ) : null}
+
+          {onBiometric ? (
           <Pressable style={styles.bio} onPress={onBiometric}>
             <MaterialCommunityIcons name="fingerprint" size={20} color={L.primary} />
             <Text style={styles.bioText}>Sign In with Fingerprint / Face ID</Text>
           </Pressable>
+          ) : null}
 
+          {onNfc ? (
           <View style={styles.dead}>
             <View style={styles.deadIcon}>
               <MaterialCommunityIcons name="nfc" size={20} color="#E0A100" />
@@ -165,6 +175,7 @@ export function LoginScreen({
               <Text style={styles.nfcText}>VERIFY{"\n"}NFC</Text>
             </Pressable>
           </View>
+          ) : null}
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
