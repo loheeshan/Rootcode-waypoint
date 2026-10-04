@@ -25,7 +25,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="profile" options={{ title: "Profile" }} />
       <Tabs.Screen name="could-not-deliver" options={{ href: null }} />
       <Tabs.Screen name="could-not-deliver-offline" options={{ href: null }} />
-            <Tabs.Screen name="camera-permission-denied" options={{ href: null }} />
+      <Tabs.Screen name="camera-permission-denied" options={{ href: null }} />
       <Tabs.Screen name="record-delivery" options={{ href: null }} />
       <Tabs.Screen name="next-stop" options={{ href: null }} />
       <Tabs.Screen name="trip-ready" options={{ href: null }} />
@@ -33,6 +33,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="trip-records" options={{ href: null }} />
       <Tabs.Screen name="kandy-trip" options={{ href: null }} />
       <Tabs.Screen name="app-settings" options={{ href: null }} />
+      <Tabs.Screen name="sign-in-to-sync" options={{ href: null }} />
       <Tabs.Screen name="notifications" options={{ href: null }} />
       <Tabs.Screen name="vehicle-shift" options={{ href: null }} />
       <Tabs.Screen name="sync-complete" options={{ href: null }} />
