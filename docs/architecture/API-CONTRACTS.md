@@ -7,8 +7,13 @@ reads, daily fleet input GET/PUT, and plan create/list/detail routes are impleme
 optimization, publishing, live operations, Loader and Driver routes remain planned.
 A live, read-only plan compatibility preview is implemented for individual
 order/vehicle rules; it is not full feasibility validation or optimization.
+Internal capacity allocation and fixed-group route scheduling engines are also
+implemented, with validated JSON route input import and a synthetic example.
+They add no HTTP endpoints or shared TypeScript DTOs. Route results are not saved,
+independently validated or publishable; the future optimize API must load scoped
+inputs and repair/reallocate infeasible groups before generating business deferrals.
 Migration `0005_planning_foundation` adds storage for plans, revisions, trips and
-stops. Plan workspace APIs now use this storage; allocation/publishing remain pending.
+stops. Plan workspace APIs now use this storage; allocation persistence/publishing remain pending.
 Migration `0006_plan_outcomes` adds order result and deferral reason storage,
 without new routes or changes to existing order JSON/status behavior.
 Migration `0007_fleet_operations` adds daily availability and fuel-usage storage.

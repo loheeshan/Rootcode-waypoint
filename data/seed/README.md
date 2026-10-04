@@ -42,3 +42,23 @@ Repeated runs preserve matching data and add any missing demo assignments.
 Conflicting fixed-ID rows, missing accounts, inactive accounts or missing
 expected roles stop the operation without partial writes. Existing passwords,
 roles, unrelated data and unrelated grants are preserved. No orders are created.
+
+## Synthetic route input snapshot
+
+`route-inputs.synthetic.json` is a standalone routing example approved for demo
+development. Every distance, travel/service time and fuel balance is invented.
+The `is_synthetic: true` flag and source label propagate into scheduler results.
+It is **not a road dataset** and its IDs are not the existing database demo-seed
+IDs. It does not insert orders, set availability, record actual consumption or
+reserve fuel. No external maps service is contacted.
+
+The example has two outlet windows, one vehicle, two illustrative order mappings
+and all six directed legs between the depot and outlets. Reverse journeys have
+separate values. It is dated 2026-10-05 deliberately for repeatable tests; it is
+not a live snapshot. Import with `app.planning.route_inputs.load_route_inputs(path)`.
+The input format and integration limitations are documented in the
+[route scheduler guide](../../apps/api/app/planning/README.md#route-scheduling-and-input-import).
+
+From `apps/api`, `uv run pytest -q tests/test_routing.py` runs the example and the
+route constraints tests. The future optimizer API must obtain real scoped master
+data and fresh usage/reservation totals separately before publishing any route.

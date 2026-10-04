@@ -11,8 +11,9 @@
 and `deferral_decisions`. All six models are registered in `app/db/models.py`.
 Dispatcher plan create/list/detail endpoints are implemented with depot scope
 checks. A live compatibility preview checks individual orders against depot
-vehicles. `allocation.py` now implements the capacity-only CP-SAT core; the
-optimization API, route feasibility checks and publishing remain pending.
+vehicles. `allocation.py` implements the capacity-only CP-SAT core; `routing.py`
+sequences fixed groups against imported travel, window and fuel inputs. The
+optimization API, independent full-plan validation and publishing remain pending.
 
 ## Storage decisions
 
@@ -254,8 +255,9 @@ wall-clock limits interrupt search.
 This engine has no HTTP endpoint yet and never reads or writes the database.
 The caller must provide complete inputs for a single depot/day. Compatibility
 preview pages must not be used as a complete allocation input. Travel/service
-times, delivery windows, weekly fuel/reservations, existing published trips,
-independent full-plan validation and result persistence remain future work.
+times, delivery windows and supplied weekly fuel balances are checked by the
+separate scheduler below. Existing published work, authoritative reservation
+loading, independent full-plan validation and result persistence remain future work.
 The two-slot rule here applies only to this candidate allocation; publication
 must also check all operational work for that vehicle/day.
 
@@ -264,6 +266,102 @@ boundaries, scarce reefer use, empty/no-match inputs, restrictions and failure
 statuses. A separate exhaustive enumerator compares small mixed-day optima and
 independently recomputes capacity, compatibility, trip limits and exact coverage.
 No dependency or migration changes are needed.
+
+## Route scheduling and input import
+
+`route_inputs.load_route_inputs(path)` imports a bounded JSON snapshot, validated
+by frozen Pydantic models. The
+[synthetic example](../../../../data/seed/route-inputs.synthetic.json) contains
+invented development data explicitly approved for demonstration. It is independent
+of existing database seeds; no IDs or fuel values are silently applied to live data.
+
+The import is an internal file format, not an authenticated API or a database
+import. Required snapshot fields are:
+
+| Field | Meaning |
+|---|---|
+| `depot_id`, `delivery_date` | One intended depot/day; the future service must verify IDs, dates and depot scope against current database records. |
+| `source`, `is_synthetic` | Required provenance label and boolean; both propagate to results. |
+| `orders` | Complete order-to-outlet mapping, including capacity-unallocated orders. |
+| `outlets` | Local Colombo open/close clock times and explicit per-visit service seconds. Mall restrictions use the same outlet window. |
+| `legs` | Directed `from_outlet_id`/`to_outlet_id`, decimal `distance_km` and integer `travel_seconds`; null denotes the depot. |
+| `vehicles` | Vehicle ID, timezone-aware earliest departure/latest return, turnaround seconds, explicitly available local dates, km/l and weekly fuel fields. |
+
+Every directed pair among a trip's depot and outlet stops must exist. Reverse
+legs, zero distances and travel times are never inferred. Extra fields, duplicate
+IDs/legs, unknown outlet references, nonfinite/negative numbers and excessive
+precision are rejected. An explicit zero-distance leg is allowed; positive
+distance requires positive travel time. This is a static matrix shared by vehicles,
+without traffic, vehicle-specific travel times or road restrictions beyond the
+earlier compatibility checks. Service time is once per outlet visit, even when
+that stop contains multiple orders. Those are current implementation assumptions.
+
+`routing.schedule_capacity(allocation, inputs)` sequences the capacity engine's
+fixed vehicle/order groups using CP-SAT circuits. It can reorder stops and swap
+the two groups on one vehicle. It never splits or moves orders between groups.
+It minimizes total route distance subject to these constraints:
+
+- Each route starts and ends at the depot and visits each assigned outlet once.
+- Early arrival waits until the outlet opens. The **entire service**, not just
+  arrival, must finish by close. Equality at the close boundary is allowed.
+- A close time before open means next-day close; the opening is anchored to the
+  plan date. Window microseconds are preserved; travel/service inputs use seconds.
+- The next trip starts after the previous depot return plus explicit turnaround.
+  Both departures must be on the plan date. Following-day availability permits
+  overnight service/return, not a second departure the following morning.
+- Each route returns by the supplied deadline. Crossing midnight requires explicit
+  following-day availability; otherwise return is capped at midnight. The horizon
+  cannot exceed the end of the following day.
+- Both trips share the vehicle's Monday-Sunday Colombo fuel budget. For each trip,
+  fuel is distance divided by km/l, rounded **up** to 0.001 litre. Consumed fuel,
+  existing reservations and the sum of candidate trip fuel must fit the quota.
+  A vehicle cannot borrow another vehicle's balance. Negative remaining budget
+  makes fixed groups infeasible, even if an individual trip would otherwise fit.
+
+`fuel_used_l` and `fuel_reserved_l` are required, explicitly known aggregate inputs;
+null means unknown and rejects scheduling for an allocated vehicle. Zero is valid
+only when explicitly recorded. The snapshot's `fuel_week_start` must be the Monday
+of the plan week. Horizons crossing into another fuel week are rejected until
+separate week budgets are supported, including Sunday-night routes after midnight.
+No fuel is consumed or reserved by this function. The future service must calculate
+fresh consumed/reserved totals, exclude the candidate's own replacement reservation,
+and avoid double-counting executed work. Publishing must lock and revalidate them.
+
+Results contain chronological trip numbers, outlet stop sequence, order IDs,
+actual arrival/service/departure/return times, distance and rounded fuel. Solver
+slack is removed by reconstructing the earliest schedule along selected arcs.
+Input groups and provenance remain untouched. Order coverage is checked before
+solving: every snapshot order belongs to exactly one group or the capacity
+unallocated list, with at most two nonempty groups per vehicle.
+
+`OPTIMAL` proves minimum distance for these fixed groups; `FEASIBLE` does not prove
+minimum distance. `INFEASIBLE` returns no trips and every grouped order under
+`unscheduled_order_ids`; preexisting `unallocated_order_ids` stay separate. Neither
+list is a stored business deferral. Missing inputs raise `RouteInputError`; UNKNOWN
+or MODEL_INVALID raises `RouteSearchUnavailable`, never an infeasibility verdict.
+
+**The future optimizer must repair or reallocate infeasible capacity groups.**
+The capacity solver's trip-minimization objective can pack orders together that
+need separate trips to satisfy windows. Failure here does not prove the orders
+cannot be served in another allocation. The scheduler also trusts the earlier
+capacity/compatibility stage and the supplied snapshot; it is not the independent
+full-plan validator. Every result keeps `is_complete_plan_validation: false`.
+There is no optimize endpoint, saved revision, driver assignment, operational
+trip ledger check or publication in this increment.
+
+Limits: 10 MB import, 500 orders/outlets/vehicles, 50,000 input legs, 25 unique
+outlet stops per trip, 20,000 solver arcs. Oversize inputs fail without truncation.
+Each leg is below 1,000,000 km with up to three decimal places; duration/service/
+turnaround is an integer from 0 to 172,800 seconds. Search defaults to five seconds,
+allows a positive limit up to 30 seconds, uses one worker and a fixed seed. That
+limit covers search, not import/model construction. Exact tie choices can vary
+between dependency versions or when wall-clock limits stop search.
+
+`tests/test_routing.py` independently recomputes timelines, coverage, fuel and
+return/turnaround constraints, compares small routes with exhaustive permutations,
+and covers missing/invalid data, infeasible groups, overnight restrictions, fuel
+rounding, numeric limits, solver statuses and the approved synthetic example.
+No migration, dependency or HTTP/shared-TypeScript contract changes are needed.
 
 ## Apply the migration
 
