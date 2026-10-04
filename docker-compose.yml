@@ -1,11 +1,19 @@
 name: waypoint
+# One-command reviewer demo: `docker compose up` (no .env needed). See DEMO-CREDENTIALS.md.
+# Defaults below are DEMO-ONLY. For local development put your own values in .env
+# (APP_ENV=development, POSTGRES_PASSWORD, JWT_SECRET_KEY); demo seeding then never runs.
+x-demo: &demo
+  # The one shared demo-only password for the four demo accounts (never use it elsewhere).
+  DEMO_SEED_PASSWORD: ${DEMO_SEED_PASSWORD:-WaypointDemo#2026}
+
 services:
   postgres:
     image: postgres:17-alpine
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-waypoint}
       POSTGRES_USER: ${POSTGRES_USER:-waypoint}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Copy .env.example to .env and choose a password}
+      # Demo default only (same demo-only password); set POSTGRES_PASSWORD in .env otherwise.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-WaypointDemo#2026}
     ports:
       - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
@@ -15,16 +23,20 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
   api:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
     environment:
-      APP_ENV: ${APP_ENV:-development}
+      <<: *demo
+      # demo: migrate, seed demo accounts/resources/today's operations, then start (idempotent).
+      APP_ENV: ${APP_ENV:-demo}
       POSTGRES_HOST: postgres
       POSTGRES_DB: ${POSTGRES_DB:-waypoint}
       POSTGRES_USER: ${POSTGRES_USER:-waypoint}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-WaypointDemo#2026}
+      # Empty in demo mode: a random key is generated once and kept in the api_secrets volume.
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-}
       JWT_ISSUER: ${JWT_ISSUER:-waypoint-api}
       JWT_AUDIENCE: ${JWT_AUDIENCE:-waypoint-clients}
@@ -32,6 +44,8 @@ services:
       CORS_ORIGINS: '${CORS_ORIGINS:-["http://localhost:3000","http://127.0.0.1:3000"]}'
     ports:
       - "${API_PORT:-8000}:8000"
+    volumes:
+      - api_secrets:/var/lib/waypoint
     depends_on:
       postgres:
         condition: service_healthy
@@ -40,19 +54,83 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+      start_period: 120s
+
   web:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
       args:
         NEXT_PUBLIC_API_URL: "http://localhost:${API_PORT:-8000}/api/v1"
+    image: waypoint-web:local
     environment:
+      <<: *demo
       # Server-side session routes reach the API by service name, not the browser's localhost.
       API_INTERNAL_URL: "http://api:8000/api/v1"
+      # The "Demo account" card on the Store and Dispatcher sign-in screens needs both.
+      APP_ENV: ${APP_ENV:-demo}
+      DEMO_MODE: ${DEMO_MODE:-true}
     ports:
       - "${WEB_PORT:-3000}:3000"
     depends_on:
       api:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/dispatcher').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  # Expo/Metro for the two mobile apps (Expo Go: Loader SDK 57, Driver SDK 56). They reuse the web
+  # image (it contains the installed workspace). The URL printed in the logs points at
+  # DEMO_HOST_IP: 10.0.2.2 for the Android emulator, or your computer's LAN IP for a phone.
+  loader-metro:
+    image: waypoint-web:local
+    pull_policy: never
+    command: ["node", "scripts/expo-docker.mjs", "loader", "8082"]
+    environment:
+      <<: *demo
+      REACT_NATIVE_PACKAGER_HOSTNAME: ${DEMO_HOST_IP:-10.0.2.2}
+      EXPO_PUBLIC_API_URL: "http://${DEMO_HOST_IP:-10.0.2.2}:${API_PORT:-8000}/api/v1"
+      EXPO_PUBLIC_DEMO_MODE: ${DEMO_MODE:-true}
+      EXPO_PUBLIC_DEMO_PASSWORD: ${DEMO_SEED_PASSWORD:-WaypointDemo#2026}
+      NODE_ENV: development
+    ports:
+      - "8082:8082"
+    depends_on:
+      web:
+        condition: service_started
+
+  driver-metro:
+    image: waypoint-web:local
+    pull_policy: never
+    command: ["node", "scripts/expo-docker.mjs", "driver", "8081"]
+    environment:
+      <<: *demo
+      REACT_NATIVE_PACKAGER_HOSTNAME: ${DEMO_HOST_IP:-10.0.2.2}
+      EXPO_PUBLIC_API_URL: "http://${DEMO_HOST_IP:-10.0.2.2}:${API_PORT:-8000}/api/v1"
+      EXPO_PUBLIC_DEMO_MODE: ${DEMO_MODE:-true}
+      EXPO_PUBLIC_DEMO_PASSWORD: ${DEMO_SEED_PASSWORD:-WaypointDemo#2026}
+      NODE_ENV: development
+    ports:
+      - "8081:8081"
+    depends_on:
+      web:
+        condition: service_started
+
+  # Prints one line once everything a reviewer needs is up.
+  demo-ready:
+    image: waypoint-web:local
+    pull_policy: never
+    command: ["node", "-e", "console.log('\\n=== Waypoint demo is ready ===\\nStore web:      http://localhost:${WEB_PORT:-3000}/store\\nDispatcher web: http://localhost:${WEB_PORT:-3000}/dispatcher\\nAPI docs:       http://localhost:${API_PORT:-8000}/docs\\nSign-in details: DEMO-CREDENTIALS.md\\n')"]
+    depends_on:
+      web:
+        condition: service_healthy
+
 volumes:
+  # The demo uses its own volumes, so `docker compose down -v` resets demo data only.
+  # Development keeps its database by setting POSTGRES_VOLUME=waypoint_postgres_data in .env.
   postgres_data:
+    name: ${POSTGRES_VOLUME:-waypoint_demo_postgres_data}
+  api_secrets:
+    name: waypoint_demo_api_secrets

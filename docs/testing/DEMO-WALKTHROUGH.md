@@ -1,5 +1,8 @@
 # Demo walkthrough
 
+> For reviewers: `docker compose up` runs the whole demo with seeded data and demo logins; see
+> [DEMO-CREDENTIALS.md](../../DEMO-CREDENTIALS.md). This page is the manual, step-by-step setup.
+
 How to run the integrated Waypoint demo (Store web, Dispatcher web, Loader and Driver Android)
 on one Windows machine against a **disposable** database. Commands are PowerShell from the repo
 root unless noted. Never put the demo password, `JWT_SECRET_KEY` or `.env` files in Git, chat or docs.

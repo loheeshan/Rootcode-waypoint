@@ -6,6 +6,11 @@ import { HOME, noticeMessages, useAuth } from "../src/services/auth";
 
 // Development builds offer the demo email; the password is still checked by the API.
 const DEMO_EMAIL = __DEV__ ? "driver@waypoint.demo" : null;
+// Docker demo stack only (EXPO_PUBLIC_DEMO_MODE=true): show the demo account. Sign-in still
+// goes through the API with these values; nothing is bypassed.
+const DEMO_ACCOUNT = process.env.EXPO_PUBLIC_DEMO_MODE === "true" && process.env.EXPO_PUBLIC_DEMO_PASSWORD
+  ? { email: "driver@waypoint.demo", password: process.env.EXPO_PUBLIC_DEMO_PASSWORD }
+  : null;
 
 export default function Login() {
   const router = useRouter();
@@ -33,6 +38,7 @@ export default function Login() {
       loading={loading}
       error={error ?? (notice ? noticeMessages[notice] : null)}
       demoEmail={DEMO_EMAIL}
+      demoAccount={DEMO_ACCOUNT}
     />
   );
 }

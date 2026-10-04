@@ -68,3 +68,15 @@ export const DEMO_EMAILS: Partial<Record<Role, string>> =
     STORE_MANAGER: 'store@waypoint.demo',
     DISPATCHER: 'dispatcher@waypoint.demo',
   };
+
+/** Demo account for a sign-in screen, from the server (only the compose demo returns one). */
+export async function loadDemoAccount(role: Role): Promise<{ email: string; password: string } | null> {
+  try {
+    const response = await fetch('/api/demo', { cache: 'no-store' });
+    const body = await response.json() as { demo?: boolean; password?: string; accounts?: Partial<Record<Role, string>> };
+    const email = body.accounts?.[role];
+    return body.demo && body.password && email ? { email, password: body.password } : null;
+  } catch {
+    return null;
+  }
+}
