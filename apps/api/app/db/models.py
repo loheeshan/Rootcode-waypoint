@@ -1,5 +1,6 @@
 """Import each domain's models here so Alembic sees the complete schema."""
 
+from app.audit.models import AuditEvent
 from app.auth.models import Role, User, UserDepot, UserOutlet, UserRole
 from app.db.base import Base
 from app.delivery.models import DeliveryEvent, ProofOfDelivery
@@ -15,6 +16,7 @@ from app.receipts.models import ReceiptConfirmation
 from app.sync.models import SyncEvent
 
 __all__ = [
+    "AuditEvent",
     "Base",
     "DeferralDecision",
     "DeliveryEvent",

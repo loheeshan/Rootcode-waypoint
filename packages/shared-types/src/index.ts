@@ -34,5 +34,17 @@ export const syncEventTypes = [
 export type SyncEventType = (typeof syncEventTypes)[number];
 export const syncOutcomes = ['APPLIED', 'DUPLICATE', 'REJECTED', 'CONFLICT', 'RETRY', 'SKIPPED'] as const;
 export type SyncOutcome = (typeof syncOutcomes)[number];
+export const auditActions = [
+  'PLAN_PUBLISHED', 'LOAD_RECORDED', 'TRIP_READY', 'TRIP_STARTED', 'STOP_ARRIVED',
+  'POD_UPLOADED', 'STOP_DELIVERED', 'STOP_FAILED', 'TRIP_COMPLETED', 'RECEIPT_CONFIRMED',
+  'SYNC_CONFLICT',
+] as const;
+export type AuditAction = (typeof auditActions)[number];
+export const auditEntities = ['PLAN', 'TRIP', 'STOP', 'ORDER'] as const;
+export type AuditEntity = (typeof auditEntities)[number];
+export const operationsExceptionKinds = [
+  'LOAD_MISSING', 'LOAD_DAMAGED', 'DELIVERY_FAILED', 'RECEIPT_PENDING', 'SYNC_CONFLICT',
+] as const;
+export type OperationsExceptionKind = (typeof operationsExceptionKinds)[number];
 export const syncStatuses = ['PENDING', 'SYNCING', 'SYNCED', 'FAILED'] as const;
 export type SyncStatus = (typeof syncStatuses)[number];

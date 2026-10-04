@@ -10,6 +10,8 @@ from fastapi import HTTPException
 from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
+from app.audit.models import AuditAction, AuditEntity
+from app.audit.service import record_audit
 from app.auth.models import User, UserDepot
 from app.db.transactions import BeforeCommit, commit_with
 from app.loading.models import LoadEvent, LoadStatus, TripLoadingCompletion
@@ -287,7 +289,7 @@ def record_load_event(
     before_commit: BeforeCommit | None = None,
 ) -> tuple[LoadEventResponse, bool]:
     # The trip row lock serializes events and readiness for one trip.
-    trip, _, _ = _scoped_trip(session, user, trip_id, lock=True)
+    trip, plan, _ = _scoped_trip(session, user, trip_id, lock=True)
     fingerprint = _fingerprint(trip.id, payload)
     existing = session.get(LoadEvent, payload.event_id)
     if existing is not None:
@@ -311,6 +313,7 @@ def record_load_event(
     )
     if assignment is None or assignment.trip_stop_id is None:
         raise fail(422, "Order is not assigned to this trip")
+    trip_before = trip.status
     if trip.status == TripStatus.PLANNED:
         trip.status = TripStatus.LOADING
         trip_orders = select(PlanAssignment.order_id).where(PlanAssignment.trip_id == trip.id)
@@ -344,6 +347,22 @@ def record_load_event(
     session.add(event)
     session.flush()
     result = _event_response(event, assignment.trip_stop_id, trip)
+    record_audit(
+        session,
+        actor_id=user.id,
+        action=AuditAction.LOAD_RECORDED,
+        entity_type=AuditEntity.ORDER,
+        entity_id=payload.order_id,
+        depot_id=plan.depot_id,
+        trip_id=trip.id,
+        source_id=event.id,
+        occurred_at=now,
+        details={
+            "load_status": payload.status,
+            "sequence_number": sequence,
+            "trip_status": {"from": trip_before, "to": trip.status},
+        },
+    )
     commit_with(session, result, before_commit)
     return result, True
 
@@ -395,5 +414,23 @@ def mark_trip_ready(
     )
     session.flush()
     result = _view(session, trip, plan, publication)
+    record_audit(
+        session,
+        actor_id=user.id,
+        action=AuditAction.TRIP_READY,
+        entity_type=AuditEntity.TRIP,
+        entity_id=trip.id,
+        depot_id=plan.depot_id,
+        trip_id=trip.id,
+        source_id=payload.request_id,
+        occurred_at=now,
+        details={
+            "trip_status": {"from": TripStatus.LOADING, "to": TripStatus.READY},
+            "last_event_sequence": last,
+            "loaded_count": result.loaded_count,
+            "missing_count": result.missing_count,
+            "damaged_count": result.damaged_count,
+        },
+    )
     commit_with(session, result, before_commit)
     return result, True

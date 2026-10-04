@@ -8,20 +8,22 @@ with `feature/` branches. The user commits and pushes after reviewing each batch
 
 **Completed:** draft optimization (`feature/planning-optimize-api`), batch 1
 publishing (`feature/planning-publish`), batch 2 loading (`feature/loader-workflow`)
-batch 3 Driver delivery (`feature/driver-delivery`) and batch 4 Store receipts
-(`feature/store-receipts`).
+batch 3 Driver delivery (`feature/driver-delivery`), batch 4 Store receipts
+(`feature/store-receipts`) and batch 5 offline sync (`feature/offline-sync`).
 
-**Current batch (5):** `feature/offline-sync` — `POST /sync/events` applying ordered
-Driver/Loader event batches through the existing services, per-event outcomes,
-persisted sync receipts committed with each change and migration `0013_sync_events`.
+**Current batch (6):** `feature/dispatcher-operations` — depot-scoped live summary,
+trip progress, exceptions (missing/damaged loads, failed stops, pending receipts,
+sync conflicts) and audit history written atomically with operational mutations;
+migration `0014_audit_events`.
 
-Open follow-up for batch 6: resolve orders left `OUT_FOR_DELIVERY` (failed stops)
-or `LOADING` (missing/damaged) after a trip completes.
+Open follow-up: orders left `OUT_FOR_DELIVERY` (failed stops) or `LOADING`
+(missing/damaged) after a trip completes are now visible as Dispatcher exceptions;
+re-planning/resolving them needs a specified override or re-plan workflow.
 
 Frontend follow-up (not a backend batch): Driver/Loader Expo SQLite outbox, NetInfo
 reconnect, relaunch recovery and pending/synced UI using `POST /sync/events`.
 
-**Two backend batches remain after this commit (6–7):**
+**One backend batch remains after this commit (7):**
 
 | Next | Suggested branch | Commit scope / completion check |
 |---|---|---|

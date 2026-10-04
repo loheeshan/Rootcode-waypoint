@@ -4,8 +4,8 @@
 
 Authentication, Store order create/list/detail, Dispatcher order listing, fleet
 reads, daily fleet input GET/PUT, plan create/list/detail, plan publishing, Loader and
-Driver routes, Store receipt confirmation and offline sync are implemented. Live
-operations remain planned.
+Driver routes, Store receipt confirmation, offline sync, live operations and audit
+history are implemented.
 A live, read-only plan compatibility preview is implemented for individual
 order/vehicle rules; it is not full feasibility validation or optimization.
 Internal capacity allocation and fixed-group route scheduling engines are also
@@ -26,6 +26,7 @@ Migration `0010_load_events` adds append-only loading events and trip readiness 
 Migration `0011_delivery_events` adds Driver delivery events and proof-of-delivery photos.
 Migration `0012_receipt_confirmations` adds Store receipt records.
 Migration `0013_sync_events` adds batch-sync receipts.
+Migration `0014_audit_events` adds operational audit history.
 Separate daily-input routes now use this storage; the fleet list still returns
 only master data. Daily writes require conditional headers described below.
 The API also exposes `GET /health`,
@@ -847,6 +848,80 @@ reads of published trips arrive in later increments. All responses use
 `Cache-Control: no-store`; POST success sets `Location` to the GET endpoint.
 Shared exports: `PublishRequest`, `PublicationResponse`, `PublishedTripResponse`,
 `FuelBalanceResponse`.
+
+## Live operations and audit
+
+```text
+GET /api/v1/operations/live
+GET /api/v1/operations/trips
+GET /api/v1/operations/exceptions
+GET /api/v1/operations/audit
+```
+
+All four require an active `DISPATCHER`. Results are restricted in SQL to the
+caller's current `user_depots`; an optional `depot_id` outside them returns 403, and
+an account with no depots receives zeros/empty lists. Only trips of each plan's
+**effective published revision** are counted. `delivery_date` (`YYYY-MM-DD`) defaults
+to today in Asia/Colombo. Responses use `Cache-Control: no-store`; database errors
+return a sanitized 503. These endpoints are read-only: no override actions exist.
+
+`GET /operations/live?delivery_date=&depot_id=` returns `OperationsSummaryResponse`:
+draft/published plan counts, `trips_by_status`, `orders_by_status` (each order of the
+effective revisions once), loading progress (`orders`, `loaded`, `missing`,
+`damaged`, `pending`, from each order's latest load event), delivery progress
+(`stops_requiring_visit`, `delivered_stops`, `failed_stops`, `open_stops`,
+`delivered_orders`, `receipts_confirmed`), `deferred_orders`, `receipts_pending`
+(orders still `DELIVERED`) and `exceptions` counted per kind from the same rows as
+the exception list.
+
+`GET /operations/trips` adds `status`, `limit` (1-100, default 20) and `offset`; items
+(`OperationsTripResponse`) carry the trip summary plus loading/delivery progress,
+ordered by depot, vehicle, trip number and ID.
+
+`GET /operations/exceptions` adds `kind`, `limit` and `offset`. Each item names the
+depot, date, trip, stop, outlet and affected `order_ids`, with time, actor, reason and
+note:
+
+| `kind` | `severity` | Source |
+|---|---|---|
+| `LOAD_MISSING` / `LOAD_DAMAGED` | `FAILURE` | Latest load event of the order (a later `LOADED` clears it). |
+| `DELIVERY_FAILED` | `FAILURE` | The stop's `FAILED` event; orders are the stop's loaded orders. |
+| `RECEIPT_PENDING` | `PENDING` | Delivered stop with orders lacking a Store receipt (outstanding work, not a failure). One item per stop; `order_ids` lists the orders. |
+| `SYNC_CONFLICT` | `FAILURE` | Audit entry recorded when a sync event returned `CONFLICT` (below). |
+
+Items sort by `occurred_at` descending, then kind and source ID. Exception items are
+per stop or order, while `/live` `receipts_pending` counts orders, so the two receipt
+figures can differ when one stop has several orders. The list is built for one
+delivery date and paginated after sorting; it is bounded by that day's trips.
+
+`GET /operations/audit` filters by `depot_id`, `action`, `entity_type`, `entity_id`,
+`trip_id`, `occurred_from`/`occurred_to` (timezone-aware, half-open), with `limit`
+(1-100, default 50) and `offset`; ordered by `occurred_at` then ID, descending.
+Entries (`AuditEventResponse`) hold the server time, authenticated actor, action,
+entity, depot, trip, `source_id` (the event, POD, receipt or publication ID; the trip
+ID for `SYNC_CONFLICT`) and
+`details` with the state change, e.g. `{"stop_status":{"from":"ARRIVED","to":"FAILED"},
+"reason_code":"OUTLET_CLOSED"}`.
+
+Audited actions: `PLAN_PUBLISHED`, `LOAD_RECORDED`, `TRIP_READY`, `TRIP_STARTED`,
+`STOP_ARRIVED`, `POD_UPLOADED`, `STOP_DELIVERED`, `STOP_FAILED`, `TRIP_COMPLETED`,
+`RECEIPT_CONFIRMED` and `SYNC_CONFLICT`. Each entry is written in the same transaction
+as its domain change (REST or sync), and only when the change is new: idempotent
+replays add nothing, and a unique dedupe key enforces this in the database. A sync
+`CONFLICT` is recorded **best effort** in a separate transaction after the rejected
+attempt rolls back (a database error there is ignored). It is recorded only when the
+caller is authorized for that trip under the event's role (a Driver must be its assigned
+driver), only once per user, trip, event type and server reason (later identical
+conflicts are not repeated), with a stop only when it belongs to the trip. Its
+`details` contain the event type, event ID and server message, never client text.
+Entries never contain passwords, tokens, photo bytes or receiver names; POD entries hold only ID, type and size. Mutations before migration
+`0014` are not backfilled, so no actor or time is invented. Plan creation,
+optimization and fleet input edits are not audited yet.
+
+Shared exports: `AuditAction`, `AuditEntity`, `OperationsExceptionKind`,
+`OperationsSummaryResponse`, `OperationsTripListResponse`, `OperationsTripResponse`,
+`LoadingProgress`, `DeliveryProgress`, `OperationsExceptionListResponse`,
+`OperationsExceptionResponse`, `AuditListResponse`, `AuditEventResponse`.
 
 ## Loader
 

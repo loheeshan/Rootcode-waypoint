@@ -12,10 +12,12 @@ from uuid import UUID
 from fastapi import HTTPException
 from pydantic import BaseModel, ValidationError
 from sqlalchemy import select
-from sqlalchemy.exc import DBAPIError, IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.auth.models import RoleCode, User
+from app.audit.models import AuditAction, AuditEntity, AuditEvent
+from app.audit.service import record_audit
+from app.auth.models import RoleCode, User, UserDepot
 from app.db.transactions import BeforeCommit
 from app.delivery.schemas import DeliverRequest, EventRequest, FailRequest
 from app.delivery.service import (
@@ -27,6 +29,8 @@ from app.delivery.service import (
 )
 from app.loading.schemas import LoadEventRequest, TripReadyRequest
 from app.loading.service import mark_trip_ready, record_load_event
+from app.planning.models import Plan, PlanRevision, Trip, TripStop
+from app.planning.publication_models import PlanPublication
 from app.sync.models import SyncEntityType, SyncEvent, SyncEventType
 from app.sync.schemas import (
     SyncBatchRequest,
@@ -170,6 +174,62 @@ def _guess_id(raw: Any, field: str) -> UUID | None:
         return None
 
 
+def _record_conflict(
+    session: Session, user: User, event: SyncEventIn, detail: str, now: datetime
+) -> None:
+    """Audit a conflicting event for Dispatchers: best effort, bounded, authorized trips only.
+
+    One entry per user, trip, event type and server reason, so varied payloads or fresh
+    event IDs cannot grow the history without limit.
+    """
+    try:
+        allowed = select(UserDepot.depot_id).where(UserDepot.user_id == user.id)
+        query = (
+            select(Plan.depot_id)
+            .select_from(Trip)
+            .join(PlanRevision, Trip.plan_revision_id == PlanRevision.id)
+            .join(Plan, PlanRevision.plan_id == Plan.id)
+            .join(PlanPublication, PlanPublication.plan_revision_id == PlanRevision.id)
+            .where(Trip.id == event.trip_id, Plan.depot_id.in_(allowed))
+        )
+        # Same trip scope as the event's own endpoint: Drivers only for assigned trips.
+        if ROUTES[event.type].role == RoleCode.DRIVER:
+            query = query.where(Trip.driver_id == user.id)
+        depot_id = session.scalar(query)
+        if depot_id is None:
+            return
+        stop_id = None
+        if event.stop_id is not None:
+            stop_id = session.scalar(
+                select(TripStop.id).where(
+                    TripStop.id == event.stop_id, TripStop.trip_id == event.trip_id
+                )
+            )
+        reason = hashlib.sha256(detail.encode()).hexdigest()[:16]
+        suffix = f":{user.id}:{event.type}:{reason}"
+        key = f"{AuditAction.SYNC_CONFLICT}:{event.trip_id}{suffix}"
+        if session.scalar(select(AuditEvent.id).where(AuditEvent.dedupe_key == key)):
+            return
+        record_audit(
+            session,
+            actor_id=user.id,
+            action=AuditAction.SYNC_CONFLICT,
+            entity_type=AuditEntity.STOP if stop_id else AuditEntity.TRIP,
+            entity_id=stop_id or event.trip_id,
+            depot_id=depot_id,
+            trip_id=event.trip_id,
+            source_id=event.trip_id,
+            occurred_at=now,
+            # Server-generated text only; client-supplied fields are not copied.
+            details={"event_type": event.type, "event_id": str(event.event_id), "detail": detail},
+            dedupe_suffix=suffix,
+        )
+        session.commit()
+    except SQLAlchemyError:
+        # A concurrent identical conflict or database error must not fail the batch.
+        session.rollback()
+
+
 def sync_events(
     session: Session, user: User, batch: SyncBatchRequest, now: datetime
 ) -> SyncBatchResponse:
@@ -244,6 +304,8 @@ def sync_events(
         else:
             record(outcome, status, None, result.model_dump(mode="json"))
             continue
+        if outcome == SyncOutcome.CONFLICT:
+            _record_conflict(session, user, event, detail, now)
         blocked.add(event.trip_id)
         record(outcome, status, detail, None)
     counts = dict.fromkeys(SyncOutcome, 0)

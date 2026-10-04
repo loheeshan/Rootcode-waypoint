@@ -7,8 +7,11 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.audit.models import AuditAction, AuditEntity
+from app.audit.service import record_audit
 from app.auth.models import User, UserOutlet
 from app.delivery.models import DeliveryEvent, DeliveryEventType
+from app.fleet.models import Outlet
 from app.loading.service import as_utc
 from app.orders.models import Order, OrderStatus
 from app.planning.assignment_models import AssignmentOutcome, PlanAssignment
@@ -101,6 +104,24 @@ def confirm_receipt(
     session.add(receipt)
     session.flush()
     result = _response(session, receipt, order)
+    outlet = session.get(Outlet, order.outlet_id)
+    if outlet is None:
+        raise ValueError("Order outlet is missing")
+    record_audit(
+        session,
+        actor_id=user.id,
+        action=AuditAction.RECEIPT_CONFIRMED,
+        entity_type=AuditEntity.ORDER,
+        entity_id=order.id,
+        depot_id=outlet.depot_id,
+        trip_id=event.trip_id,
+        source_id=receipt.id,
+        occurred_at=now,
+        details={
+            "order_status": {"from": OrderStatus.DELIVERED, "to": OrderStatus.RECEIPT_CONFIRMED},
+            "delivery_event_id": str(event.id),
+        },
+    )
     session.commit()
     return result, True
 

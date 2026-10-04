@@ -38,7 +38,7 @@ def test_business_routes_are_not_fake_successes() -> None:
     assert client.get("/api/v1/dispatcher/orders").status_code == 401
     assert client.get("/api/v1/fleet").status_code == 401
     assert client.get("/api/v1/plans").status_code == 401
-    assert client.get("/api/v1/operations/live").status_code == 404
+    assert client.get("/api/v1/operations/live").status_code == 401
 
 
 def test_cors_only_accepts_configured_web_origins() -> None:
