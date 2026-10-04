@@ -4,10 +4,12 @@ import { useRouter } from 'expo-router';
 import { EndShiftModal } from '../src/components/EndShiftModal';
 import { colors } from '../src/theme/tokens';
 import { LOGIN, useAuth } from '../src/services/auth';
+import { useSync } from '../src/sync/SyncProvider';
 
 export default function EndShiftScreen() {
   const router = useRouter();
   const { signOut } = useAuth();
+  const { counts } = useSync();
   const [visible, setVisible] = useState(true);
 
   // TODO(feature/driver-sqlite, feature/driver-sync): replace with the real number
@@ -40,6 +42,7 @@ export default function EndShiftScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.overlay }}>
       <EndShiftModal
+        unsent={counts.pending + counts.syncing + counts.failed}
         visible={visible}
         onReviewSync={handleReviewSync}
         onEndShift={handleEndShift}

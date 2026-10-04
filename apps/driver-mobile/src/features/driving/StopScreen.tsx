@@ -44,17 +44,17 @@ export function StopScreen() {
       {error ? <Notice tone="red" title="Not saved">{error}</Notice> : null}
 
       {stop.status === 'DELIVERED' ? (
-        <Notice tone="green" title={`Delivered${stop.outcome_at ? ` ${colomboTime(stop.outcome_at)}` : ''}`}>
-          Confirmed by the server for {deliverable.length} order{deliverable.length === 1 ? '' : 's'}.
+        <Notice tone="green" title={`Delivered${stop.local ? ' · waiting to sync' : stop.outcome_at ? ` ${colomboTime(stop.outcome_at)}` : ''}`}>
+          {stop.local ? 'Saved on this phone; not yet confirmed by the server. ' : 'Confirmed by the server. '}For {deliverable.length} order{deliverable.length === 1 ? '' : 's'}.
         </Notice>
       ) : null}
       {stop.status === 'FAILED' ? (
-        <Notice tone="red" title={`Not delivered${stop.outcome_at ? ` · ${colomboTime(stop.outcome_at)}` : ''}`}>
+        <Notice tone="red" title={`Not delivered${stop.local ? ' · waiting to sync' : stop.outcome_at ? ` · ${colomboTime(stop.outcome_at)}` : ''}`}>
           {stop.failure_reason ? FAILURE_LABEL[stop.failure_reason] : 'Failed'}{stop.failure_note ? ` — ${stop.failure_note}` : ''}
         </Notice>
       ) : null}
       {stop.status === 'ARRIVED' && stop.arrived_at ? (
-        <Notice tone="blue" title={`Arrived ${colomboTime(stop.arrived_at)}`}>Record proof of delivery, or report why it could not be delivered.</Notice>
+        <Notice tone="blue" title={`Arrived ${colomboTime(stop.arrived_at)}${stop.local ? ' · waiting to sync' : ''}`}>Record proof of delivery, or report why it could not be delivered.</Notice>
       ) : null}
       {!stop.requires_visit && status !== 'PLANNED' && status !== 'LOADING' ? <Notice tone="amber" title="No visit needed">No orders for this stop were loaded on the vehicle.</Notice> : null}
       {stop.status === 'PLANNED' && stop.requires_visit && !onRoute ? (

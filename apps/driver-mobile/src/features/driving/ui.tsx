@@ -4,6 +4,7 @@ import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, T
 import { AppHeader } from '../../components/AppHeader';
 import { useIsOffline } from '../../hooks/useIsOffline';
 import { useAuth } from '../../services/auth';
+import { useSync } from '../../sync/SyncProvider';
 import { colors, radius, spacing } from '../../theme/tokens';
 
 /** Driver screen shell: header with the signed-in account and live connectivity, pull to refresh. */
@@ -16,10 +17,12 @@ export function DriverScreen({ title, subtitle, refreshing = false, onRefresh, c
 }) {
   const { user } = useAuth();
   const offline = useIsOffline();
+  const { counts, running, stopped, syncNow } = useSync();
+  const waiting = counts.pending + counts.syncing;
   return (
     <View style={styles.screen}>
       {/* Online mode has no local queue, so "synced" only means nothing is waiting on this phone. */}
-      <AppHeader subtitle={subtitle ?? user?.email ?? 'Driver'} syncStatus={offline ? 'offline' : 'synced'} />
+      <AppHeader subtitle={subtitle ?? user?.email ?? 'Driver'} syncStatus={offline ? (waiting ? 'offline-saved' : 'offline') : waiting ? 'pending' : 'synced'} />
       <ScrollView
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
@@ -27,7 +30,16 @@ export function DriverScreen({ title, subtitle, refreshing = false, onRefresh, c
       >
         <Text style={styles.title} accessibilityRole="header">{title}</Text>
         {offline ? (
-          <Notice tone="red" title="No connection">Deliveries need a connection until offline saving is added. Nothing is saved while offline.</Notice>
+          <Notice tone="amber" title="No connection">Actions are saved on this phone and sent automatically when you are back online.</Notice>
+        ) : null}
+        {waiting && !offline ? (
+          <Notice tone="blue" title={running ? `Sending ${waiting} change${waiting === 1 ? '' : 's'}…` : `${waiting} change${waiting === 1 ? '' : 's'} waiting to sync`}>
+            {stopped === 'unauthorized' ? 'Sign in again to send them.' : stopped === 'forbidden' ? 'This account no longer has Driver access for this work.' : 'Saved on this phone. Not yet confirmed by the server.'}
+          </Notice>
+        ) : null}
+        {waiting && !offline && !running && stopped !== 'unauthorized' && stopped !== 'forbidden' ? <Button variant="outline" label="Sync now" onPress={syncNow} /> : null}
+        {counts.failed ? (
+          <Notice tone="red" title={`${counts.failed} change${counts.failed === 1 ? '' : 's'} not applied`}>Open the trip on Stops to review.</Notice>
         ) : null}
         {children}
       </ScrollView>

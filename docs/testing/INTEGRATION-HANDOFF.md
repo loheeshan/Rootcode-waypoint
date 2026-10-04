@@ -10,12 +10,12 @@ Never record passwords, tokens or `.env` contents here.
 | 1 Demo foundation | `feature/integration-demo-foundation` | `dev` `be6967e` (all backend batches incl. #201) | Done (`aa3add7`, merged #202) |
 | 2 Auth (Store, Loader, Driver) | `feature/integration-demo-auth` | `dev` `68db449` | Done (`978bb94`) |
 | 3 Store web | `feature/integration-store-web` | Step 2 `978bb94` | Done (`e6b42be`, merged #205) |
-| 4 Dispatcher web | `feature/integration-dispatcher-web` | `dev` `865f0f8` | In review |
+| 4 Dispatcher web | `feature/integration-dispatcher-web` | `dev` `865f0f8` | Done (`291c0f9`, merged #208) |
 | 5 Loader online | `feature/integration-loader-mobile` | `dev` `066dcad` | Done (`b865967`, merged #206) |
 | 6 Driver online | `feature/integration-driver-mobile` | `dev` `8113aa3` | Done (`5a0c6ce`, merged #207) |
 | 7 Loader offline | `feature/integration-loader-offline` | `dev` `865f0f8` | Done (`a9a0af8`, merged #209) |
-| 8 Driver offline | `feature/integration-driver-offline` | Step 7 | Pending |
-| 9 Acceptance | `feature/integration-release-validation` | all | Pending (needs Step 4) |
+| 8 Driver offline | `feature/integration-driver-offline` | Step 7 `a9a0af8` | In review (not device-tested) |
+| 9 Acceptance | `feature/integration-release-validation` | all | Pending (needs Step 8) |
 
 Steps 5–6 were verified with the demo scenario below (optimize, assign the Driver, publish through
 the real services) because the Dispatcher UI was not connected yet. From Step 4 on, the Dispatcher
@@ -448,6 +448,21 @@ Verification (Pixel 7 emulator, Expo Go SDK 57, disposable database):
 | Physical device / iOS | NOT RUN |
 | Partial batch / RETRY / 50-event batches / stale sequence | Covered by unit tests against real SQLite (not on device) |
 
+## Step 8: Driver offline persistence and sync
+
+Same design as Step 7 on the shared outbox; details in `apps/driver-mobile/src/sync/README.md`.
+Driver actions are saved on the phone first; proof photos upload (idempotent `pod_id`) before the
+queued delivery is sent; READY for start comes only from the server copy; per-account storage.
+
+| Check | Result |
+|---|---|
+| Driver typecheck (only pre-existing `TurnByTurnCard` errors), lint on changed files | PASS |
+| Emulator: offline start/arrive/proof/deliver/fail/complete -> relaunch -> reconnect, exactly once | NOT RUN (skipped at the user's request) |
+| Expired session, conflict, duplicate retry, account switch on Driver | NOT RUN |
+
+Manual check: follow the Step 7 table with `driver@waypoint.demo` and Expo Go SDK 56; confirm
+`proof_of_delivery` has one row per delivered stop and `sync_events` has one receipt per action.
+
 ## Next step
 
-Step 4 in review on `feature/integration-dispatcher-web`; then Step 8 on `feature/integration-driver-offline`.
+Step 9 acceptance on `feature/integration-release-validation` once Step 8 is merged.

@@ -4,6 +4,8 @@ import { Pressable, Text } from 'react-native';
 import { ApiError, type DriverTripListResponse, type DriverTripResponse } from '@waypoint/api-contracts';
 
 import { getApiClient } from '../../services/api';
+import { useSync } from '../../sync/SyncProvider';
+import { readTripList, saveTripList } from '../../sync/store';
 import { colors } from '../../theme/tokens';
 import { useDriverTrip } from './DriverTripProvider';
 import { TRIP_LABEL, colomboTime, colomboToday, shortId } from './format';
@@ -18,18 +20,23 @@ export function TodayTripsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const today = colomboToday();
 
+  const { db, userId } = useSync();
   const load = useCallback(async () => {
     setRefreshing(true);
     try {
       const page = await getApiClient().request<DriverTripListResponse>(`/driver/trips?delivery_date=${today}&limit=100`);
+      if (userId) await saveTripList(db, userId, today, page.items);
       setTrips([...page.items].sort((a, b) => a.departure_at.localeCompare(b.departure_at)));
       setError(null);
     } catch (failure) {
-      setError(failure instanceof ApiError ? 'Trips could not be loaded. Pull to try again.' : 'No connection. Pull to retry when online.');
+      const cached = userId ? await readTripList(db, userId, today) : null;
+      if (cached) setTrips([...cached.value].sort((a, b) => a.departure_at.localeCompare(b.departure_at)));
+      setError(failure instanceof ApiError ? 'Trips could not be refreshed. Pull to try again.'
+        : cached ? `No connection. Showing trips saved at ${colomboTime(cached.fetchedAt)}.` : 'No connection. Pull to retry when online.');
     } finally {
       setRefreshing(false);
     }
-  }, [today]);
+  }, [today, db, userId]);
 
   // Refetch whenever Today is shown so READY/IN_PROGRESS changes from other roles are current.
   useFocusEffect(useCallback(() => { void load(); }, [load]));
