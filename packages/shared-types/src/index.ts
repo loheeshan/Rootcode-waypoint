@@ -16,5 +16,7 @@ export const deferralReasons = [
   'VEHICLE_UNAVAILABLE', 'TRIP_LIMIT',
 ] as const;
 export type DeferralReason = (typeof deferralReasons)[number];
+export const loadStatuses = ['LOADED', 'MISSING', 'DAMAGED'] as const;
+export type LoadStatus = (typeof loadStatuses)[number];
 export const syncStatuses = ['PENDING', 'SYNCING', 'SYNCED', 'FAILED'] as const;
 export type SyncStatus = (typeof syncStatuses)[number];

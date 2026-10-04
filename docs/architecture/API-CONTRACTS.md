@@ -3,8 +3,8 @@
 ## Implementation status
 
 Authentication, Store order create/list/detail, Dispatcher order listing, fleet
-reads, daily fleet input GET/PUT, plan create/list/detail and plan publishing routes are
-implemented. Store receipt, live operations, Loader and Driver routes remain planned.
+reads, daily fleet input GET/PUT, plan create/list/detail, plan publishing and Loader
+routes are implemented. Store receipt, live operations and Driver routes remain planned.
 A live, read-only plan compatibility preview is implemented for individual
 order/vehicle rules; it is not full feasibility validation or optimization.
 Internal capacity allocation and fixed-group route scheduling engines are also
@@ -21,6 +21,7 @@ Migration `0007_fleet_operations` adds daily availability and fuel-usage storage
 Migration `0008_plan_optimizations` adds request replay keys and immutable-by-service
 input/result snapshots for each optimized revision. Migration `0009_plan_publications`
 adds publication replay records, per-trip fuel reservations and a one-published-revision index.
+Migration `0010_load_events` adds append-only loading events and trip readiness records.
 Separate daily-input routes now use this storage; the fleet list still returns
 only master data. Daily writes require conditional headers described below.
 The API also exposes `GET /health`,
@@ -819,6 +820,80 @@ GET  /api/v1/trips/{trip_id}/loading
 POST /api/v1/trips/{trip_id}/load-events
 POST /api/v1/trips/{trip_id}/ready
 ```
+
+All four require an active `LOADER` and the trip's plan depot in the caller's current
+`user_depots`. Scope is applied in SQL on every request, so revocation is immediate.
+Only trips of each plan's **effective published revision** (the one referenced by
+`plan_publications`) are visible; draft, unpublished, foreign and missing trips return
+`404 {"detail":"Trip not found"}`. Responses use `Cache-Control: no-store`.
+
+Orders have no product lines, so loading is recorded **per assigned order** as
+`LOADED`, `MISSING` or `DAMAGED` (`LoadStatus`); no quantities or units are invented.
+
+`GET /loader/trips` accepts optional `delivery_date`, `status` (`TripStatus`), `limit`
+(1-100, default 20) and `offset`; it sorts by delivery date descending, then vehicle,
+trip number and ID. Items (`LoaderTripResponse`) carry the trip, plan, depot, date,
+vehicle, trip number, assigned driver, status, published departure/return and stop
+and order counts.
+
+`GET /trips/{id}/loading` (`TripLoadingResponse`) returns that summary, stops in
+`sequence_number` order, each stop's assigned orders (order status, temperature,
+three-decimal weight/volume, current `load_status`, `note`, `last_event_id`),
+counts of loaded/missing/damaged/pending orders, `last_event_sequence` and the
+readiness `completion` (or null).
+
+`POST /trips/{id}/load-events` accepts one event:
+
+```json
+{"event_id":"<client UUID>","order_id":"<UUID>","status":"DAMAGED",
+ "note":"Crushed carton","occurred_at":"2026-10-05T06:40:00+05:30"}
+```
+
+`note` is optional for `LOADED` and required (non-blank, at most 500 characters) for
+`MISSING`/`DAMAGED`. `occurred_at` is optional, timezone-aware, stored in UTC and at
+most five minutes ahead of the server. The order must be a `SERVED` assignment of
+that trip (otherwise 422). Events are append-only; a later event for the same order
+supersedes the earlier one. The server assigns a gap-free per-trip `sequence_number`.
+The first event moves the trip `PLANNED -> LOADING` and its `PLANNED` orders to
+`LOADING`. Response `LoadEventResponse`: 201 new, 200 when the same `event_id` and
+payload are replayed (even after the trip is ready). A reused `event_id` with
+different data or on another trip returns 409. Events after the trip leaves `LOADING`
+return 409 `Loading is finalized for this trip`.
+
+`POST /trips/{id}/ready` accepts `{"request_id":"<UUID>","last_event_sequence":3}`.
+**Readiness requirements**, all checked under the trip row lock:
+
+1. The trip is `LOADING` (a `PLANNED` trip has no events and fails rule 2).
+2. `last_event_sequence` equals the trip's latest sequence, proving the Loader
+   reviewed the current state; otherwise 409 `Loading changed ... retry`.
+3. Every `SERVED` order on the trip has a current outcome (none pending).
+4. At least one order is currently `LOADED`.
+
+`MISSING`/`DAMAGED` outcomes are allowed and stay visible as exceptions with notes.
+Success sets the trip `READY`, stores a `trip_loading_completions` record (request ID,
+sequence and counts) and returns 201 with the loading view. The same request ID and
+sequence replay 200; a reused ID with other data, or another ID after readiness,
+returns 409. `READY` is final for loading: no further events or reversal.
+
+Load events and ready requests lock the trip row, so a concurrent event either
+commits first (making the ready request's sequence stale) or is rejected after
+readiness. Route stops, driver assignments and fuel reservations are never changed.
+Missing/damaged orders keep order status `LOADING`; their delivery outcome belongs
+to the Driver/Dispatcher batches. 503 responses hide database details; retry with
+the same ID. Status codes: 401/403 authentication/role, 404 scope, 409 conflicts
+above, 422 invalid body, order or time.
+
+Offline-sync notes: the current outcome is the event with the highest server
+sequence, so **last arrival wins**, not latest `occurred_at`; the ready check makes a
+human review that state before confirming. Replays match on event ID and payload,
+with `occurred_at` compared as an instant (any offset); a replay returns the current
+`trip_status`, so outboxes should compare status codes and IDs, not whole bodies. A
+replay after depot access is revoked returns 404; treat 404/401/403/422 as terminal
+rather than retrying forever. The offline-sync batch may refine these rules.
+
+Shared exports: `LoadStatus`, `LoaderTripResponse`, `LoaderTripListResponse`,
+`TripLoadingResponse`, `LoadingStopResponse`, `LoadingOrderResponse`,
+`LoadingCompletionResponse`, `LoadEventRequest`, `LoadEventResponse`, `TripReadyRequest`.
 
 ## Driver
 

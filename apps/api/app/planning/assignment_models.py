@@ -11,6 +11,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     ForeignKeyConstraint,
+    Index,
     String,
     UniqueConstraint,
     Uuid,
@@ -44,6 +45,8 @@ class PlanAssignment(Base):
     __tablename__ = "plan_assignments"
     __table_args__ = (
         UniqueConstraint("plan_revision_id", "order_id", name="uq_plan_assignments_revision_order"),
+        # Reference target letting loading events prove an order is served on one trip.
+        Index("uq_plan_assignments_id_trip_order", "id", "trip_id", "order_id", unique=True),
         UniqueConstraint("plan_revision_id", "order_id", "outcome",
                          name="uq_plan_assignments_revision_order_outcome"),
         CheckConstraint("outcome IN ('SERVED', 'DEFERRED')", name="outcome_allowed"),

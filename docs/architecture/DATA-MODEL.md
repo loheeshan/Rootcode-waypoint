@@ -60,6 +60,22 @@ tables and indexes but keeps published revisions, drivers and order statuses;
 re-upgrading leaves those published trips without reservations, which then block
 planning for that week. Test rollback only on disposable databases.
 
+### Loading events and readiness
+
+Migration `0010_load_events` preserves all 20 earlier application tables and adds:
+
+| Table / index | Stored fields and constraints |
+|---|---|
+| `load_events` | Client-supplied UUID `id` (stable event ID); `trip_id`; `assignment_id`; `order_id`; positive `sequence_number`, unique per trip; `status` `LOADED`/`MISSING`/`DAMAGED`; nullable `note` (at most 500, required and non-blank unless `LOADED`); `request_hash`; nullable UTC `occurred_at`; required `recorded_by` user and `recorded_at`. Composite FK `(assignment_id, trip_id, order_id)` to `plan_assignments`, so the order must be served on that trip. Indexed by `(trip_id, order_id)`. |
+| `trip_loading_completions` | `trip_id` primary key; unique `request_id`; positive `last_event_sequence`; `loaded_count > 0` and non-negative missing/damaged counts; `confirmed_by`; `confirmed_at`. |
+| `uq_plan_assignments_id_trip_order` | Unique `(id, trip_id, order_id)` target for the event FK. |
+
+All FKs use `RESTRICT`. Events are never updated; the latest sequence per order is
+the current outcome. Trip/order status changes are written by the loading service
+in the same transaction. Downgrading to `0009_plan_publications` drops both tables
+and the index but keeps any `LOADING`/`READY` trip and `LOADING` order statuses;
+test rollback only on disposable databases.
+
 ### Identity
 
 - `users`: UUID primary key, unique lowercase/trimmed nonempty email (up to 320

@@ -1,7 +1,10 @@
-import type { DeferralReason, OrderStatus, PlanStatus, Role } from '@waypoint/shared-types';
+import type {
+  DeferralReason, LoadStatus, OrderStatus, PlanStatus, Role, StopStatus, TripStatus,
+} from '@waypoint/shared-types';
 
 export type {
-  Role, OrderStatus, TripStatus, PlanStatus, StopStatus, AssignmentOutcome, DeferralReason, SyncStatus,
+  Role, OrderStatus, TripStatus, PlanStatus, StopStatus, AssignmentOutcome, DeferralReason, LoadStatus,
+  SyncStatus,
 } from '@waypoint/shared-types';
 export interface HealthResponse { status: 'ok'; service: string; version: string }
 export interface LoginRequest { email: string; password: string }
@@ -254,6 +257,88 @@ export interface PublicationResponse {
   deferred_order_count: number;
   trips: PublishedTripResponse[];
   fuel_balances: FuelBalanceResponse[];
+}
+export interface LoaderTripResponse {
+  trip_id: string;
+  plan_id: string;
+  depot_id: string;
+  delivery_date: string;
+  vehicle_id: string;
+  trip_number: number;
+  driver_id: string | null;
+  status: TripStatus;
+  departure_at: string;
+  return_at: string;
+  stop_count: number;
+  order_count: number;
+}
+export interface LoaderTripListResponse {
+  items: LoaderTripResponse[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+export interface LoadingOrderResponse {
+  order_id: string;
+  order_status: OrderStatus;
+  temperature_requirement: 'ambient' | 'chilled';
+  order_weight_kg: string;
+  order_volume_m3: string;
+  load_status: LoadStatus | null;
+  note: string | null;
+  last_event_id: string | null;
+}
+export interface LoadingStopResponse {
+  stop_id: string;
+  outlet_id: string;
+  sequence_number: number;
+  status: StopStatus;
+  planned_arrival_time: string | null;
+  orders: LoadingOrderResponse[];
+}
+export interface LoadingCompletionResponse {
+  request_id: string;
+  last_event_sequence: number;
+  loaded_count: number;
+  missing_count: number;
+  damaged_count: number;
+  confirmed_by: string;
+  confirmed_at: string;
+}
+export interface TripLoadingResponse {
+  trip: LoaderTripResponse;
+  last_event_sequence: number;
+  loaded_count: number;
+  missing_count: number;
+  damaged_count: number;
+  pending_count: number;
+  stops: LoadingStopResponse[];
+  completion: LoadingCompletionResponse | null;
+}
+/** `note` is required (non-blank, max 500) for MISSING and DAMAGED. Reuse event_id on retry. */
+export interface LoadEventRequest {
+  event_id: string;
+  order_id: string;
+  status: LoadStatus;
+  note?: string | null;
+  occurred_at?: string | null;
+}
+export interface LoadEventResponse {
+  event_id: string;
+  trip_id: string;
+  stop_id: string;
+  order_id: string;
+  status: LoadStatus;
+  note: string | null;
+  sequence_number: number;
+  occurred_at: string | null;
+  recorded_at: string;
+  recorded_by: string;
+  trip_status: TripStatus;
+}
+export interface TripReadyRequest {
+  request_id: string;
+  last_event_sequence: number;
 }
 export class ApiError extends Error {
   constructor(public readonly status: number, message: string) { super(message); this.name = 'ApiError'; }

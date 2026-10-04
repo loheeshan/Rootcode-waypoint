@@ -8,6 +8,7 @@ from app.core.config import get_settings
 from app.fleet.operations_router import router as fleet_inputs_router
 from app.fleet.router import router as fleet_router
 from app.health import router as health_router
+from app.loading.router import router as loading_router
 from app.orders.dispatcher_router import router as dispatcher_orders_router
 from app.orders.router import router as store_orders_router
 from app.planning.router import router as plans_router
@@ -34,6 +35,7 @@ def create_app() -> FastAPI:
     application.include_router(fleet_router, prefix="/api/v1")
     application.include_router(fleet_inputs_router, prefix="/api/v1")
     application.include_router(plans_router, prefix="/api/v1")
+    application.include_router(loading_router, prefix="/api/v1")
 
     @application.exception_handler(RequestValidationError)
     async def validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
