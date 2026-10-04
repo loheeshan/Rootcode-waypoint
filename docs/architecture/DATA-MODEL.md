@@ -95,6 +95,18 @@ delivery service in the same transaction. Downgrading to `0010_load_events` drop
 tables and the indexes, deleting stored photos, but keeps trip/stop/order statuses;
 test rollback only on disposable databases.
 
+### Receipt confirmations
+
+Migration `0012_receipt_confirmations` preserves all 24 earlier application tables
+and adds `receipt_confirmations`: client request UUID `id`; unique `order_id`;
+`outlet_id` with a composite FK `(order_id, outlet_id)` to `orders`; required
+`delivery_event_id` (the Driver's `DELIVERED` event); `confirmed_by` user; UTC
+`confirmed_at`. All FKs use `RESTRICT`, with indexes on outlet, delivery event and
+confirming user. The service writes the receipt and the order's
+`RECEIPT_CONFIRMED` status in one transaction; no discrepancy fields are stored
+because none are specified. Downgrading to `0011_delivery_events` drops the table but
+keeps `RECEIPT_CONFIRMED` order statuses; test rollback only on disposable databases.
+
 ### Identity
 
 - `users`: UUID primary key, unique lowercase/trimmed nonempty email (up to 320

@@ -4,7 +4,8 @@
 
 Authentication, Store order create/list/detail, Dispatcher order listing, fleet
 reads, daily fleet input GET/PUT, plan create/list/detail, plan publishing, Loader and
-Driver routes are implemented. Store receipt, live operations and sync remain planned.
+Driver routes and Store receipt confirmation are implemented. Live operations and sync
+remain planned.
 A live, read-only plan compatibility preview is implemented for individual
 order/vehicle rules; it is not full feasibility validation or optimization.
 Internal capacity allocation and fixed-group route scheduling engines are also
@@ -23,6 +24,7 @@ input/result snapshots for each optimized revision. Migration `0009_plan_publica
 adds publication replay records, per-trip fuel reservations and a one-published-revision index.
 Migration `0010_load_events` adds append-only loading events and trip readiness records.
 Migration `0011_delivery_events` adds Driver delivery events and proof-of-delivery photos.
+Migration `0012_receipt_confirmations` adds Store receipt records.
 Separate daily-input routes now use this storage; the fleet list still returns
 only master data. Daily writes require conditional headers described below.
 The API also exposes `GET /health`,
@@ -117,9 +119,10 @@ GET  /api/v1/store/orders
 POST /api/v1/store/orders
 GET  /api/v1/store/orders/{order_id}
 POST /api/v1/store/orders/{order_id}/receipt
+GET  /api/v1/store/orders/{order_id}/receipt
 ```
 
-The first three routes are implemented; receipt confirmation is still planned.
+All Store routes are implemented, including receipt confirmation below.
 Every implemented Store route requires bearer authentication and `STORE_MANAGER`.
 Assignments are reloaded on each request. A depot grant alone never grants Store
 outlet access. There is no role-only bypass for Dispatcher/Driver/Loader.
@@ -209,9 +212,40 @@ field validation uses the existing sanitized 422 error array.
 
 Creation is not idempotent: each successful POST creates an order. Clients must
 not automatically retry a POST after an uncertain network outcome; refresh the
-list first. Idempotency keys, status mutations and receipt submission are future
-increments. Shared types are `OrderCreateRequest`, `OrderResponse`,
+list first. Order creation has no idempotency key; receipt confirmation below does.
+Shared types are `OrderCreateRequest`, `OrderResponse`,
 `OrderCreateResponse` and `OrderListResponse` in `@waypoint/api-contracts`.
+
+### Receipt confirmation
+
+`POST /api/v1/store/orders/{order_id}/receipt` accepts only
+`{"request_id":"<client UUID>"}`. `GET` on the same path returns the saved receipt.
+Both require an active `STORE_MANAGER` whose current `user_outlets` include the
+order's outlet; the order is selected through that assignment in SQL, so missing,
+other-outlet and revoked orders return `404 {"detail":"Order not found"}`.
+
+Confirmation is allowed only when the order is `DELIVERED` **and** the Driver's
+`DELIVERED` event exists for the stop serving it in the plan's effective published
+revision. It atomically stores the receipt (request ID, order, outlet, delivery
+event, confirming user, server time) and moves the order
+`DELIVERED -> RECEIPT_CONFIRMED`. Orders at failed stops (`OUT_FOR_DELIVERY`), and
+`CONFIRMED`, `PLANNED`, `DEFERRED` or `LOADING` orders, return 409
+`Only delivered orders can be confirmed as received`. A `DELIVERED` order without a
+delivery record returns 409 `No delivery record exists for this order`.
+
+`ReceiptResponse`: `request_id`, `order_id`, `outlet_id`, current `order_status`,
+`delivery_event_id`, `delivered_at` (Driver time, else server record time),
+`confirmed_by`, `confirmed_at`. Status codes: 201 created (with `Location`), 200 when
+the same `request_id` is replayed for the same order, 409 when the order already has
+a receipt under another request ID or the request ID belongs to another order, 404
+when `GET` finds no receipt, 422 for invalid bodies, 503 sanitized database errors.
+The order row lock and a unique order key prevent duplicate receipts under
+concurrency. The supplied specifications define no discrepancy fields, so none are
+stored; quantity/damage disputes are not part of this endpoint.
+
+The status change is visible through the existing Store list/detail
+(`status=RECEIPT_CONFIRMED` filter) and the Dispatcher order queue. Shared types:
+`ReceiptRequest`, `ReceiptResponse`.
 
 ## Dispatcher
 

@@ -14,6 +14,7 @@ from app.loading.router import router as loading_router
 from app.orders.dispatcher_router import router as dispatcher_orders_router
 from app.orders.router import router as store_orders_router
 from app.planning.router import router as plans_router
+from app.receipts.router import router as receipts_router
 
 
 def create_app() -> FastAPI:
@@ -38,6 +39,7 @@ def create_app() -> FastAPI:
     application.include_router(health_router, prefix="/api/v1")
     application.include_router(auth_router, prefix="/api/v1")
     application.include_router(store_orders_router, prefix="/api/v1")
+    application.include_router(receipts_router, prefix="/api/v1")
     application.include_router(dispatcher_orders_router, prefix="/api/v1")
     application.include_router(fleet_router, prefix="/api/v1")
     application.include_router(fleet_inputs_router, prefix="/api/v1")

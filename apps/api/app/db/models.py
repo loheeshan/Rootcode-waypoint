@@ -11,6 +11,7 @@ from app.planning.assignment_models import DeferralDecision, PlanAssignment
 from app.planning.models import Plan, PlanRevision, Trip, TripStop
 from app.planning.optimization_models import PlanOptimization
 from app.planning.publication_models import FuelReservation, PlanPublication
+from app.receipts.models import ReceiptConfirmation
 
 __all__ = [
     "Base",
@@ -27,6 +28,7 @@ __all__ = [
     "PlanPublication",
     "PlanRevision",
     "ProofOfDelivery",
+    "ReceiptConfirmation",
     "Role",
     "Trip",
     "TripLoadingCompletion",

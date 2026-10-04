@@ -429,6 +429,20 @@ export interface DeliveryEventResponse {
   trip_status: TripStatus;
   stop_status: StopStatus | null;
 }
+/** Reuse request_id when retrying an uncertain confirmation. */
+export interface ReceiptRequest {
+  request_id: string;
+}
+export interface ReceiptResponse {
+  request_id: string;
+  order_id: string;
+  outlet_id: string;
+  order_status: OrderStatus;
+  delivery_event_id: string;
+  delivered_at: string;
+  confirmed_by: string;
+  confirmed_at: string;
+}
 export class ApiError extends Error {
   constructor(public readonly status: number, message: string) { super(message); this.name = 'ApiError'; }
 }

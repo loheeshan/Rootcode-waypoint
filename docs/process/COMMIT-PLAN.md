@@ -7,16 +7,17 @@ include completed work and frontend tasks. Use one reviewable commit per batch,
 with `feature/` branches. The user commits and pushes after reviewing each batch.
 
 **Completed:** draft optimization (`feature/planning-optimize-api`), batch 1
-publishing (`feature/planning-publish`) and batch 2 loading (`feature/loader-workflow`).
+publishing (`feature/planning-publish`), batch 2 loading (`feature/loader-workflow`)
+and batch 3 Driver delivery (`feature/driver-delivery`).
 
-**Current batch (3):** `feature/driver-delivery` — assigned-Driver trip list/detail,
-guarded start, arrival, delivered/failed stop outcomes, completion, proof-of-delivery
-upload/retrieval in PostgreSQL, stable event IDs and migration `0011_delivery_events`.
+**Current batch (4):** `feature/store-receipts` — outlet-scoped receipt confirmation
+and retrieval for delivered orders, guarded `DELIVERED -> RECEIPT_CONFIRMED`,
+idempotent request IDs and migration `0012_receipt_confirmations`.
 
 Open follow-up for batch 6: resolve orders left `OUT_FOR_DELIVERY` (failed stops)
 or `LOADING` (missing/damaged) after a trip completes.
 
-**Four backend batches remain after this commit (4–7):**
+**Three backend batches remain after this commit (5–7):**
 
 | Next | Suggested branch | Commit scope / completion check |
 |---|---|---|
