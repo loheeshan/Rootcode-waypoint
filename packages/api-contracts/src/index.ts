@@ -136,6 +136,33 @@ export interface PlanListResponse {
   limit: number;
   offset: number;
 }
+export type CompatibilityIssue =
+  | 'DEPOT_MISMATCH' | 'TEMPERATURE_MISMATCH' | 'VAN_REQUIRED'
+  | 'WEIGHT_CAPACITY' | 'VOLUME_CAPACITY' | 'VEHICLE_UNAVAILABLE' | 'AVAILABILITY_UNKNOWN';
+export interface VehicleExclusionResponse {
+  vehicle_id: string;
+  reasons: CompatibilityIssue[];
+}
+export interface OrderCompatibilityResponse {
+  order: DispatcherOrderResponse;
+  candidate_vehicle_ids: string[];
+  excluded_vehicles: VehicleExclusionResponse[];
+}
+export interface CompatibilityVehicleResponse {
+  vehicle: VehicleResponse;
+  is_available: boolean | null;
+}
+export interface PlanCompatibilityResponse {
+  plan_id: string;
+  depot_id: string;
+  delivery_date: string;
+  is_complete_plan_validation: false;
+  items: OrderCompatibilityResponse[];
+  vehicles: CompatibilityVehicleResponse[];
+  total: number;
+  limit: number;
+  offset: number;
+}
 export class ApiError extends Error {
   constructor(public readonly status: number, message: string) { super(message); this.name = 'ApiError'; }
 }

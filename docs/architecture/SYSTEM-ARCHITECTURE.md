@@ -129,6 +129,15 @@ Hard rules:
 - vehicle availability
 - served/deferred
 
+The individual-order compatibility stage is implemented in
+`apps/api/app/planning/compatibility.py`, with a depot-scoped live preview at
+`GET /api/v1/plans/{plan_id}/compatibility`. It checks depot, exact-day vehicle
+availability, temperature/access compatibility and each order's weight/volume.
+It returns candidate vehicles and all pair exclusions, without allocating shared
+capacity or writing outcomes. Preview pagination is not a complete solver input
+snapshot. Route timing, fuel, combined capacity, trip limits, allocation and the
+independent validator remain future work; candidate status is not route feasibility.
+
 ## Published plan rule
 
 Published plans are immutable. Changes create new plan revisions.

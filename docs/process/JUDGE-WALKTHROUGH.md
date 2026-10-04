@@ -42,6 +42,16 @@ total such as `{"fuel_used_l":"0"}` with the same conditional flow. Future fuel
 dates are rejected. Planner enforcement, weekly balances and audit history remain
 future increments; these inputs do not allocate orders or change plans.
 
+For the new compatibility step, record availability for the **plan's delivery
+date** (which may differ from today), then GET
+`/api/v1/plans/{plan_id}/compatibility`. Verify that only confirmed orders for its
+depot/date appear. Inspect candidate vehicle IDs and exclusions such as
+`TEMPERATURE_MISMATCH`, `VAN_REQUIRED` or `AVAILABILITY_UNKNOWN`. Missing
+availability excludes a vehicle until explicitly recorded. Exact capacity is
+allowed. The response always says `is_complete_plan_validation: false`; it does
+not allocate trips, save deferrals, check fuel/windows or publish a plan. Opening
+it should leave the draft revision's saved counts unchanged.
+
 ## 1. Store Manager
 1. Login.
 2. Create order.

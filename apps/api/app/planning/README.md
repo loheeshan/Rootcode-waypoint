@@ -10,7 +10,8 @@
 `assignment_models.py` and migration `0006_plan_outcomes` add `plan_assignments`
 and `deferral_decisions`. All six models are registered in `app/db/models.py`.
 Dispatcher plan create/list/detail endpoints are implemented with depot scope
-checks. Allocation and publishing services remain separate increments.
+checks. A live compatibility preview checks individual orders against depot
+vehicles. Allocation and publishing services remain separate increments.
 
 ## Storage decisions
 
@@ -145,6 +146,71 @@ head shown below when updating the backend.
 Tests in `tests/test_plans_api.py` cover scope/role revocation, concurrent creation,
 atomic failures, filtering, counters, UTC responses and Colombo local-day boundaries.
 See the [exact contract](../../../../docs/architecture/API-CONTRACTS.md#plan-workspaces).
+
+## Compatibility preview
+
+`GET /api/v1/plans/{plan_id}/compatibility?limit=20&offset=0` requires an active
+Dispatcher and current access to the plan's depot. Missing/foreign plans both
+return `404 Plan not found`. Only `CONFIRMED` orders with the plan's accepted
+delivery date and current outlet depot are selected. Orders from other assigned
+depots, other dates or other statuses are excluded before counting/pagination.
+
+`compatibility.py` provides a deterministic engine using frozen input/result
+dataclasses and Decimal comparisons. Inputs must have valid typed enums/UUIDs,
+finite positive quantities and explicit boolean/unknown availability. Duplicate
+order or vehicle IDs are rejected. Each whole order is checked independently;
+orders are not split, assigned or deducted from shared vehicle capacity.
+
+The response lists candidate IDs and every exclusion for each order, with
+vehicle master data and exact-plan-day `is_available` (`true`, `false` or null).
+Only explicit true permits a candidate. Yesterday's availability is not reused.
+The engine checks all rules in this order:
+
+| Issue | Exclusion |
+|---|---|
+| `DEPOT_MISMATCH` | Vehicle and outlet home depots differ (the API already selects one depot). |
+| `TEMPERATURE_MISMATCH` | A chilled order requires a reefer; ambient orders may use either temperature type. |
+| `VAN_REQUIRED` | A van-only outlet cannot use a truck. |
+| `WEIGHT_CAPACITY` | The whole order exceeds the vehicle's weight limit. |
+| `VOLUME_CAPACITY` | The whole order exceeds the vehicle's volume limit. |
+| `VEHICLE_UNAVAILABLE` | Availability for that day is explicitly false. |
+| `AVAILABILITY_UNKNOWN` | No availability is recorded for that day. |
+
+Exact capacity equality is allowed; no floating-point rounding or tolerance is
+used. Candidate and excluded vehicle lists are disjoint and cover all returned
+vehicles for each order. These issues are **not persisted deferral reasons**.
+Zero candidates can mean missing inputs; it does not mark an order deferred.
+
+Pagination applies to orders only: default 20, range 1–100, nonnegative offset,
+UUID ascending. `total` counts all eligible confirmed orders. The entire depot
+vehicle set is returned on every page, also sorted by UUID. A depot with more
+than 500 vehicles gets 422 rather than a truncated candidate set; the limit bounds
+each response to at most 50,000 order/vehicle pairs. Empty order pages retain the
+vehicle set; an empty fleet gives each order empty candidate/exclusion lists.
+
+`is_complete_plan_validation` is always false. Two orders can each fit a vehicle
+but exceed its combined capacity. Even a vehicle with zero fuel quota may pass
+these individual checks because route distance/fuel is not evaluated here.
+Combined loads, delivery windows, route sequencing/distance, weekly fuel usage
+and reservations, two-trip/day limits, and full served/deferred coverage still
+need allocation and an independent validator. No feasible-plan verdict is issued.
+
+This is a live, advisory read, including for historical or published plans. It
+does not read a saved revision's assignments or reproduce the inputs used when
+that revision was created. Separate reads/pages can observe data changes; it is
+not a consistent solver snapshot, reservation, or a source for publishing without
+revalidation. No order status, trip, result, revision, availability or fuel row
+is changed. Success uses `Cache-Control: no-store`; database errors return
+`503 Compatibility preview unavailable` without SQL/connection details.
+
+Use the fleet input API to mark a demo vehicle available for the **plan's date**,
+then open the preview and inspect the candidate IDs/exclusions. Plan revision
+counts remain unchanged. The frontend DTOs and full shape are in the
+[compatibility contract](../../../../docs/architecture/API-CONTRACTS.md#plan-compatibility-preview).
+Tests in `test_compatibility.py` exercise the engine's rules/boundaries; API tests
+in `test_compatibility_api.py` check scope, exact-day inputs, status eligibility,
+pagination, the vehicle limit, historical/published reads and absence of writes.
+No migration is added; the current `0007_fleet_operations` head is required.
 
 ## Apply the migration
 
