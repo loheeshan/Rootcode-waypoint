@@ -36,6 +36,7 @@ const STOPS_CHILDREN = [
   "camera-permission-denied",
   "sign-in-to-sync",
   "delivery-needs-proof",
+  "trip-waiting-for-loading",
 ];
 const SYNC_CHILDREN = ["sync-complete", "route-conflict", "photo-attention"];
 const TODAY_CHILDREN = ["today-reefer-fault"];
