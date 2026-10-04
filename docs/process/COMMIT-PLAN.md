@@ -47,6 +47,22 @@ fleet inputs, plan workspace, compatibility and saved optimization contracts.
 Publishing, loading, delivery, receipts and sync need the batches above. Finishing
 these backend batches does not itself implement or connect every frontend screen.
 
+## Integration steps (frontend <-> backend, 2026-10-04)
+
+Branches and evidence: [INTEGRATION-HANDOFF.md](../testing/INTEGRATION-HANDOFF.md).
+
+| Step | Branch | Status |
+|---|---|---|
+| 1 Demo foundation | `feature/integration-demo-foundation` | Merged (#202) |
+| 2 Auth | `feature/integration-demo-auth` | Merged (#204) |
+| 3 Store web | `feature/integration-store-web` | Merged (#205) |
+| 4 Dispatcher web | `feature/integration-dispatcher-web` | Merged (#208) |
+| 5 Loader online | `feature/integration-loader-mobile` | Merged (#206) |
+| 6 Driver online | `feature/integration-driver-mobile` | Merged (#207) |
+| 7 Loader offline | `feature/integration-loader-offline` | Merged (#209) |
+| 8 Driver offline | `feature/integration-driver-offline` | Merged (#210) |
+| 9 Acceptance + demo handoff | `feature/integration-release-validation` | In review: `test(integration): verify complete role workflows and document demo setup` |
+
 ## Repository foundation
 
 Branch:

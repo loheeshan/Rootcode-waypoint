@@ -8,14 +8,14 @@ Never record passwords, tokens or `.env` contents here.
 | Step | Branch | Base | Status |
 |---|---|---|---|
 | 1 Demo foundation | `feature/integration-demo-foundation` | `dev` `be6967e` (all backend batches incl. #201) | Done (`aa3add7`, merged #202) |
-| 2 Auth (Store, Loader, Driver) | `feature/integration-demo-auth` | `dev` `68db449` | Done (`978bb94`) |
+| 2 Auth (Store, Loader, Driver) | `feature/integration-demo-auth` | `dev` `68db449` | Done (`978bb94`, merged #204) |
 | 3 Store web | `feature/integration-store-web` | Step 2 `978bb94` | Done (`e6b42be`, merged #205) |
 | 4 Dispatcher web | `feature/integration-dispatcher-web` | `dev` `865f0f8` | Done (`291c0f9`, merged #208) |
 | 5 Loader online | `feature/integration-loader-mobile` | `dev` `066dcad` | Done (`b865967`, merged #206) |
 | 6 Driver online | `feature/integration-driver-mobile` | `dev` `8113aa3` | Done (`5a0c6ce`, merged #207) |
 | 7 Loader offline | `feature/integration-loader-offline` | `dev` `865f0f8` | Done (`a9a0af8`, merged #209) |
-| 8 Driver offline | `feature/integration-driver-offline` | Step 7 `a9a0af8` | In review (not device-tested) |
-| 9 Acceptance | `feature/integration-release-validation` | all | Pending (needs Step 8) |
+| 8 Driver offline | `feature/integration-driver-offline` | Step 7 `a9a0af8` | Done (`e18f66c`, merged #210); offline delivery fix in Step 9 |
+| 9 Acceptance | `feature/integration-release-validation` | `dev` `ab4c70d` | In review |
 
 Steps 5–6 were verified with the demo scenario below (optimize, assign the Driver, publish through
 the real services) because the Dispatcher UI was not connected yet. From Step 4 on, the Dispatcher
@@ -463,6 +463,80 @@ queued delivery is sent; READY for start comes only from the server copy; per-ac
 Manual check: follow the Step 7 table with `driver@waypoint.demo` and Expo Go SDK 56; confirm
 `proof_of_delivery` has one row per delivered stop and `sync_events` has one receipt per action.
 
+## Step 9: cross-role acceptance and demo handoff
+
+Results and evidence: [ROLE-ACCEPTANCE.md](ROLE-ACCEPTANCE.md). Demo setup: [DEMO-WALKTHROUGH.md](DEMO-WALKTHROUGH.md).
+
+Environment (2026-10-04, ~23:00 Colombo):
+- Linux container: Node 22.22, pnpm 10.34.6, Python 3.12 (uv).
+- Disposable PostgreSQL **16.14** database `waypoint_acceptance` (17 is not installed here).
+- Generated seed password and JWT key, kept outside the repo and deleted after the run.
+- Production web build with headless Chromium (ad hoc Playwright scripts, not in the repo).
+
+Main flow, one continuous run, all through real services and the same server IDs:
+- Store web created four orders. Dispatcher web recorded availability, optimized, assigned the
+  demo Driver and published revision 2; a reload showed the same effective revision.
+- Loader and Driver steps used the apps' exact REST calls (no emulator here; the device is NOT RUN).
+- Store web confirmed the receipt. Dispatcher web showed the trip and order status, the exceptions,
+  the delivery outcome, the receipt and 16 audit entries.
+
+The failure case covered a failed stop (`OUTLET_CLOSED` + note), a deferred order
+(`NO_COMPATIBLE_VEHICLE`) and a MISSING load. None appeared as delivered, to the Store or the Dispatcher.
+
+Test clock: orders created at 23:04 get 6 Oct, and trips start only on their delivery date. For the
+delivery-day steps the API was restarted with an acceptance launcher, kept outside the repo, that
+overrides only the FastAPI `get_*_time` dependencies (the same seam the backend tests use). Auth
+and JWT used the real clock. No rows were changed by hand.
+
+Offline sync without a device:
+- Outbox runs: the shared `@waypoint/mobile-sync` Outbox on a file SQLite database, sending to the
+  live API. Separate processes stood in for kill and relaunch. Covered: Loader LOADED and ready,
+  Driver start/arrive/fail/complete, account switch on one phone, and a lost response. Results:
+  each event applied once, and the account switch sent nothing.
+- App-layer run: the Driver app's `runDriverSync` with only its Expo modules mocked, against the
+  live API.
+
+Integration regression found and fixed (Step 8, never device-tested):
+- **Problem:** `runDriverSync` uploaded proof photos before sending the queue. For a stop where
+  start, arrive and deliver were all recorded offline, the first sync after reconnect failed:
+  - the proof upload got 409 ("only after arriving") and was marked failed;
+  - then STOP_DELIVERED was sent without a proof and came back CONFLICT.
+- **Fix** (`apps/driver-mobile/src/sync/driverSync.ts`):
+  1. a 409 on a proof whose earlier trip events are still queued now waits instead of failing;
+  2. the queue is sent without that delivery and the later events of its trip, which are held
+     locally as RETRY;
+  3. then the proof is uploaded and the held events are sent, in the same pass.
+- **Tests:** a new regression test, `apps/driver-mobile/tests/driverSync.test.ts` (3 cases), failed
+  before the fix. After the fix, against the live API: 4 events APPLIED, 1 `proof_of_delivery` row,
+  trip COMPLETED, and a repeat pass sent nothing.
+
+Validation:
+- Backend: `ruff`, `mypy` and `pytest` (1138 passed, 16 skipped) pass. The 16 PostgreSQL-only
+  tests also pass on PostgreSQL 16 through an ad hoc plugin (17/17).
+- Frontend: `pnpm test` 64/64, web build and `pnpm export:mobile` pass.
+- `pnpm lint` (6 driver-mobile errors) and the driver-mobile typecheck (`TurnByTurnCard` icons)
+  still fail. Both failures existed before this step and are on `dev` too.
+
+NOT RUN in this environment (no Android emulator, `adb` or Expo Go). Manual steps on the Windows machine:
+
+1. Follow [DEMO-WALKTHROUGH.md](DEMO-WALKTHROUGH.md) sections 2–3 with the disposable database.
+   Start the Pixel_7 emulator, then `corepack pnpm dev:loader` and `corepack pnpm dev:driver`.
+2. Loader and Driver login screens: correct password, wrong password, the other role's account,
+   End shift, and an expired session (restart the API with a new `JWT_SECRET_KEY`).
+3. Loader online steps from walkthrough section 8.3. Then the offline check:
+   - turn airplane mode on, record Loaded/Missing and Mark ready;
+   - kill and relaunch the app (the work is still shown), then turn airplane mode off;
+   - in the database, check one `load_events` row per action, one `trip_loading_completions` row
+     and one `sync_events` receipt each.
+4. Driver steps from walkthrough section 8.4, on the delivery date. Then repeat a delivery fully
+   offline (start, arrive, proof, deliver, complete), kill, relaunch and reconnect:
+   - one `proof_of_delivery` row and one `delivery_events` row per action;
+   - no "needs attention" item.
+
+   Also check: camera denied/cancelled; a stop failed offline; the account switch (sign out with
+   unsent work, sign in as another account: nothing of the first account is shown or sent).
+5. Record the results in ROLE-ACCEPTANCE.md and replace each NOT RUN with PASS or FAIL.
+
 ## Next step
 
-Step 9 acceptance on `feature/integration-release-validation` once Step 8 is merged.
+Run the NOT RUN device checks above on the Windows emulator, then promote `dev` to `main` when the demo is accepted.

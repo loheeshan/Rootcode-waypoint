@@ -7,7 +7,10 @@ Built on `@waypoint/mobile-sync` (`packages/mobile-sync`), like the Loader (`app
 - Deliver: the proof (receiver, photo file, `pod_id`) is kept in `driver_deliver_intents`, and
   `STOP_DELIVERED` is queued at once so actions stay in order. Each sync uploads pending proofs first
   (`POST .../pod`, idempotent by `pod_id`); while a proof cannot be uploaded for a network/server
-  reason, nothing is sent, so a delivery never reaches the server before its proof. The photo is
+  reason, nothing is sent, so a delivery never reaches the server before its proof. The server
+  accepts a proof only after the arrival: when start/arrive were also recorded offline, the 409 is
+  not a rejection; the queue is sent without that delivery and the later events of its trip (held
+  locally as RETRY), the proof is uploaded, then the delivery is sent in the same pass. The photo is
   deleted once the server has it.
 - Screens show the cached server trip with unsent actions applied (`features/driving/overlay.ts`),
   labelled "waiting to sync". Start is offered only when the server copy says READY.
