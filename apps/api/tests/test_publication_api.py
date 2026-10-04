@@ -540,3 +540,44 @@ def test_migration_roundtrip_keeps_published_rows(
         )
     after = state(engine)
     assert after[1:5] == (1, 0, 0, 2)
+
+
+def test_replay_ignores_assignment_order(
+    client, engine, resources, headers, driver, optimized
+):
+    payload = publish_body(optimized, driver)
+    first = client.post(publish_url(resources, optimized), headers=headers, json=payload)
+    assert first.status_code == 201
+    reordered = {**payload, "driver_assignments": payload["driver_assignments"][::-1]}
+    again = client.post(publish_url(resources, optimized), headers=headers, json=reordered)
+    assert again.status_code == 200 and again.json() == first.json()
+
+
+def test_revision_without_trips_publishes_all_orders_deferred(
+    client, engine, resources, headers, body
+):
+    with Session(engine) as db:
+        db.execute(update(VehicleAvailability).values(is_available=False))
+        db.commit()
+    optimized = client.post(url(resources), headers=headers, json={**body, "shifts": []}).json()
+    assert optimized["trips"] == []
+    response = client.post(
+        publish_url(resources, optimized),
+        headers=headers,
+        json={"request_id": str(uuid4()), "driver_assignments": []},
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["fuel_balances"] == []
+    assert state(engine)[5] == ("DEFERRED",) * 3
+
+
+def test_changed_fuel_efficiency_rejects_stale_revision(
+    client, engine, resources, headers, driver, optimized
+):
+    with Session(engine) as db:
+        db.execute(update(Vehicle).values(km_per_l=Decimal("1")))
+        db.commit()
+    response = client.post(
+        publish_url(resources, optimized), headers=headers, json=publish_body(optimized, driver)
+    )
+    assert response.status_code == 409 and "run a new optimization" in response.text
