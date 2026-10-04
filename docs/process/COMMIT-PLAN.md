@@ -8,16 +8,20 @@ with `feature/` branches. The user commits and pushes after reviewing each batch
 
 **Completed:** draft optimization (`feature/planning-optimize-api`), batch 1
 publishing (`feature/planning-publish`), batch 2 loading (`feature/loader-workflow`)
-and batch 3 Driver delivery (`feature/driver-delivery`).
+batch 3 Driver delivery (`feature/driver-delivery`) and batch 4 Store receipts
+(`feature/store-receipts`).
 
-**Current batch (4):** `feature/store-receipts` — outlet-scoped receipt confirmation
-and retrieval for delivered orders, guarded `DELIVERED -> RECEIPT_CONFIRMED`,
-idempotent request IDs and migration `0012_receipt_confirmations`.
+**Current batch (5):** `feature/offline-sync` — `POST /sync/events` applying ordered
+Driver/Loader event batches through the existing services, per-event outcomes,
+persisted sync receipts committed with each change and migration `0013_sync_events`.
 
 Open follow-up for batch 6: resolve orders left `OUT_FOR_DELIVERY` (failed stops)
 or `LOADING` (missing/damaged) after a trip completes.
 
-**Three backend batches remain after this commit (5–7):**
+Frontend follow-up (not a backend batch): Driver/Loader Expo SQLite outbox, NetInfo
+reconnect, relaunch recovery and pending/synced UI using `POST /sync/events`.
+
+**Two backend batches remain after this commit (6–7):**
 
 | Next | Suggested branch | Commit scope / completion check |
 |---|---|---|

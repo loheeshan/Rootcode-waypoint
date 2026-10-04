@@ -4,8 +4,8 @@
 
 Authentication, Store order create/list/detail, Dispatcher order listing, fleet
 reads, daily fleet input GET/PUT, plan create/list/detail, plan publishing, Loader and
-Driver routes and Store receipt confirmation are implemented. Live operations and sync
-remain planned.
+Driver routes, Store receipt confirmation and offline sync are implemented. Live
+operations remain planned.
 A live, read-only plan compatibility preview is implemented for individual
 order/vehicle rules; it is not full feasibility validation or optimization.
 Internal capacity allocation and fixed-group route scheduling engines are also
@@ -25,6 +25,7 @@ adds publication replay records, per-trip fuel reservations and a one-published-
 Migration `0010_load_events` adds append-only loading events and trip readiness records.
 Migration `0011_delivery_events` adds Driver delivery events and proof-of-delivery photos.
 Migration `0012_receipt_confirmations` adds Store receipt records.
+Migration `0013_sync_events` adds batch-sync receipts.
 Separate daily-input routes now use this storage; the fleet list still returns
 only master data. Daily writes require conditional headers described below.
 The API also exposes `GET /health`,
@@ -942,7 +943,7 @@ GET  /api/v1/trips/{trip_id}/stops/{stop_id}/pod
 POST /api/v1/trips/{trip_id}/stops/{stop_id}/deliver
 POST /api/v1/trips/{trip_id}/stops/{stop_id}/fail
 POST /api/v1/trips/{trip_id}/complete
-POST /api/v1/sync/events            (planned: offline-sync batch)
+POST /api/v1/sync/events            (batched offline sync, below)
 ```
 
 Every Driver route requires an active `DRIVER` who is the trip's assigned
@@ -1023,6 +1024,88 @@ Shared exports: `DeliveryEventType`, `DeliveryFailureReason`, `DriverTripRespons
 `DriverTripListResponse`, `DriverTripDetailResponse`, `DriverStopResponse`,
 `DriverOrderResponse`, `PodResponse`, `PodUploadRequest`, `DeliveryEventRequest`,
 `DeliverRequest`, `FailRequest`, `DeliveryEventResponse`.
+
+## Offline synchronization
+
+```text
+POST /api/v1/sync/events
+```
+
+Requires an active `DRIVER` or `LOADER`. Each event is applied by the same service
+as its REST endpoint, so role, current depot access, Driver assignment, trip/stop/order
+ownership, readiness and POD rules are rechecked for every event, **including
+replays**. Identity comes only from the bearer token; `device_id` is stored for
+tracing and `occurred_at` values are display-only.
+
+```json
+{
+  "device_id": "driver-phone-7f3a",
+  "events": [
+    {"event_id": "<UUID>", "type": "TRIP_STARTED", "trip_id": "<UUID>", "payload": {}},
+    {"event_id": "<UUID>", "type": "STOP_ARRIVED", "trip_id": "<UUID>", "stop_id": "<UUID>",
+     "payload": {"occurred_at": "2026-10-05T08:02:00+05:30"}},
+    {"event_id": "<UUID>", "type": "STOP_DELIVERED", "trip_id": "<UUID>", "stop_id": "<UUID>",
+     "payload": {"pod_id": "<UUID already uploaded via POST .../pod>"}}
+  ]
+}
+```
+
+| `type` | Role | Payload (REST body without its ID) | Equivalent REST call |
+|---|---|---|---|
+| `LOAD_RECORDED` | Loader | `order_id`, `status`, `note?`, `occurred_at?` | `POST /trips/{id}/load-events` |
+| `TRIP_READY` | Loader | `last_event_sequence` | `POST /trips/{id}/ready` (`request_id` = `event_id`) |
+| `TRIP_STARTED` | Driver | `occurred_at?` | `POST /trips/{id}/start` |
+| `STOP_ARRIVED` | Driver | `occurred_at?` (needs `stop_id`) | `POST .../stops/{sid}/arrive` |
+| `STOP_DELIVERED` | Driver | `pod_id`, `occurred_at?` (needs `stop_id`) | `POST .../stops/{sid}/deliver` |
+| `STOP_FAILED` | Driver | `reason_code`, `note`, `occurred_at?` (needs `stop_id`) | `POST .../stops/{sid}/fail` |
+| `TRIP_COMPLETED` | Driver | `occurred_at?` | `POST /trips/{id}/complete` |
+
+The envelope `event_id` becomes the domain ID; a payload containing that ID field is
+rejected. POD photos are never embedded: upload them first with the POD endpoint
+(itself idempotent by `pod_id`) and reference `pod_id`.
+
+**Ordering and partial success.** A batch holds 1-50 events and is processed in
+array order. Each event commits in its own transaction together with its
+`sync_events` receipt, so earlier applied events stay applied if a later one fails.
+After any event of a trip is not applied (rejected, conflict, retry), later events of
+that trip in the same batch are `SKIPPED` (not attempted); other trips continue.
+Send events oldest first in creation order; never reorder or merge them.
+
+The endpoint returns 200 with one result per input event (same `index`). Only an
+invalid envelope (missing/blank `device_id`, 0 or more than 50 events, extra fields)
+returns 422, and authentication/role failures return 401/403 for the whole batch.
+
+| `outcome` | `http_status` | Meaning / client action |
+|---|---|---|
+| `APPLIED` | 201 | New change committed; mark synced. `result` is the domain response. |
+| `DUPLICATE` | 200 | Same `event_id` and equivalent payload already applied; mark synced. `result` shows **current** trip/stop status, not a historical copy. |
+| `REJECTED` | 403/404/422 | Invalid payload, wrong role, or entity not accessible (including revoked access on replay). Do not resend unchanged; surface to the user. |
+| `CONFLICT` | 409 | Stale state (e.g. ready with an old sequence, deliver before arrival or without POD, trip finalized) or the `event_id` was used with different data/type/user. Server state is not overwritten; reload the trip and let the user decide. |
+| `RETRY` | 503 | Temporary database failure; nothing was committed. Resend the same event unchanged later. |
+| `REJECTED` | 500 | Unexpected server error for this event (logged); nothing was committed. Do not loop; surface for support. |
+| `SKIPPED` | 424 | Not attempted because an earlier event of this trip failed; resend after resolving it. |
+
+An event whose envelope is invalid also blocks later events of its `trip_id` (when
+that ID is readable). Use separate event IDs for REST calls and sync events: an ID
+first used through REST has no sync receipt, and reusing it for another sync type
+later makes the original resend return `CONFLICT`.
+
+Equivalence: the receipt hash covers type, trip, stop and the validated payload
+(with `occurred_at` compared as an instant). Receipts persist in PostgreSQL, so a
+restarted app resending its outbox gets `DUPLICATE`. Concurrent duplicate
+submissions serialize on the trip row lock and apply once; the unique receipt
+`event_id` rolls back any second application. A whole-batch 503 means nothing after
+the failure point is known; resend the batch unchanged.
+
+**Frontend guidance.** Store each event with a UUID generated once, its exact
+payload and `pending` status in Expo SQLite before updating the UI. On reconnect,
+send pending events oldest first in batches of at most 50, mark
+`APPLIED`/`DUPLICATE` as synced, keep `RETRY`/`SKIPPED` pending, and move
+`REJECTED`/`CONFLICT` to a needs-attention state after refreshing the trip. The
+mobile outbox, SQLite storage and NetInfo handling remain frontend work.
+
+Shared exports: `SyncEventType`, `SyncOutcome`, `SyncEventRequest`, `SyncBatchRequest`,
+`SyncEventResult`, `SyncBatchResponse`.
 
 ## Shared statuses
 

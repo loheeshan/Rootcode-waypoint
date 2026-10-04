@@ -27,5 +27,12 @@ export const deliveryFailureReasons = [
   'VEHICLE_ISSUE', 'OTHER',
 ] as const;
 export type DeliveryFailureReason = (typeof deliveryFailureReasons)[number];
+export const syncEventTypes = [
+  'LOAD_RECORDED', 'TRIP_READY', 'TRIP_STARTED', 'STOP_ARRIVED', 'STOP_DELIVERED',
+  'STOP_FAILED', 'TRIP_COMPLETED',
+] as const;
+export type SyncEventType = (typeof syncEventTypes)[number];
+export const syncOutcomes = ['APPLIED', 'DUPLICATE', 'REJECTED', 'CONFLICT', 'RETRY', 'SKIPPED'] as const;
+export type SyncOutcome = (typeof syncOutcomes)[number];
 export const syncStatuses = ['PENDING', 'SYNCING', 'SYNCED', 'FAILED'] as const;
 export type SyncStatus = (typeof syncStatuses)[number];

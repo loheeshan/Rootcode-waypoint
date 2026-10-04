@@ -12,6 +12,7 @@ from app.planning.models import Plan, PlanRevision, Trip, TripStop
 from app.planning.optimization_models import PlanOptimization
 from app.planning.publication_models import FuelReservation, PlanPublication
 from app.receipts.models import ReceiptConfirmation
+from app.sync.models import SyncEvent
 
 __all__ = [
     "Base",
@@ -30,6 +31,7 @@ __all__ = [
     "ProofOfDelivery",
     "ReceiptConfirmation",
     "Role",
+    "SyncEvent",
     "Trip",
     "TripLoadingCompletion",
     "TripStop",

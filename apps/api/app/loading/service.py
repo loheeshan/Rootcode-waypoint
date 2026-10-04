@@ -11,6 +11,7 @@ from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
 from app.auth.models import User, UserDepot
+from app.db.transactions import BeforeCommit, commit_with
 from app.loading.models import LoadEvent, LoadStatus, TripLoadingCompletion
 from app.loading.schemas import (
     LoaderTripListResponse,
@@ -278,7 +279,12 @@ def _fingerprint(trip_id: UUID, payload: LoadEventRequest) -> str:
 
 
 def record_load_event(
-    session: Session, user: User, trip_id: UUID, payload: LoadEventRequest, now: datetime
+    session: Session,
+    user: User,
+    trip_id: UUID,
+    payload: LoadEventRequest,
+    now: datetime,
+    before_commit: BeforeCommit | None = None,
 ) -> tuple[LoadEventResponse, bool]:
     # The trip row lock serializes events and readiness for one trip.
     trip, _, _ = _scoped_trip(session, user, trip_id, lock=True)
@@ -338,12 +344,17 @@ def record_load_event(
     session.add(event)
     session.flush()
     result = _event_response(event, assignment.trip_stop_id, trip)
-    session.commit()
+    commit_with(session, result, before_commit)
     return result, True
 
 
 def mark_trip_ready(
-    session: Session, user: User, trip_id: UUID, payload: TripReadyRequest, now: datetime
+    session: Session,
+    user: User,
+    trip_id: UUID,
+    payload: TripReadyRequest,
+    now: datetime,
+    before_commit: BeforeCommit | None = None,
 ) -> tuple[TripLoadingResponse, bool]:
     trip, plan, publication = _scoped_trip(session, user, trip_id, lock=True)
     existing = session.scalar(
@@ -384,5 +395,5 @@ def mark_trip_ready(
     )
     session.flush()
     result = _view(session, trip, plan, publication)
-    session.commit()
+    commit_with(session, result, before_commit)
     return result, True
