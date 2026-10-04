@@ -12,6 +12,9 @@ const TABS: Record<string, { label: string; icon: keyof typeof Ionicons.glyphMap
   profile: { label: 'Profile', icon: 'person-outline' },
 };
 
+// Hidden routes that belong to the Stops tab, so it stays highlighted while they are open.
+const STOP_SCREENS = ['next-stop', 'record-delivery', 'could-not-deliver'];
+
 export function DriverTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
 
@@ -20,7 +23,8 @@ export function DriverTabBar({ state, navigation }: BottomTabBarProps) {
       {state.routes.map((route, index) => {
         const tab = TABS[route.name];
         if (!tab) return null;
-        const focused = state.index === index;
+        const active = state.routes[state.index]?.name ?? '';
+        const focused = state.index === index || (route.name === 'stops' && STOP_SCREENS.includes(active));
 
         const onPress = () => {
           const event = navigation.emit({
@@ -28,7 +32,7 @@ export function DriverTabBar({ state, navigation }: BottomTabBarProps) {
             target: route.key,
             canPreventDefault: true,
           });
-          if (!focused && !event.defaultPrevented) {
+          if (state.index !== index && !event.defaultPrevented) {
             navigation.navigate(route.name as never);
           }
         };

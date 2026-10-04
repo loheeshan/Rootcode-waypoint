@@ -13,6 +13,23 @@ export function setUnauthorizedHandler(handler: (() => void) | null): void {
   onUnauthorized = handler;
 }
 
+// A request with no answer by then is treated as a connection failure (fetch has no default timeout).
+// Large bodies (a proof-of-delivery photo) get longer on slow mobile networks.
+const REQUEST_TIMEOUT_MS = 30_000;
+const UPLOAD_TIMEOUT_MS = 90_000;
+
+async function withTimeout<T>(init: RequestInit | undefined, run: (init: RequestInit) => Promise<T>): Promise<T> {
+  if (init?.signal) return run(init);
+  const controller = new AbortController();
+  const large = typeof init?.body === 'string' && init.body.length > 100_000;
+  const timer = setTimeout(() => controller.abort(), large ? UPLOAD_TIMEOUT_MS : REQUEST_TIMEOUT_MS);
+  try {
+    return await run({ ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export function getApiClient() {
   const client = createApiClient(apiUrl(), session.getToken);
   const guard = async <T>(call: (token: string | null) => Promise<T>): Promise<T> => {
@@ -29,7 +46,7 @@ export function getApiClient() {
   };
   return {
     requestWithMetadata: <T>(path: string, init?: RequestInit) =>
-      guard(() => client.requestWithMetadata<T>(path, init)),
-    request: <T>(path: string, init?: RequestInit) => guard(() => client.request<T>(path, init)),
+      guard(() => withTimeout(init, (timed) => client.requestWithMetadata<T>(path, timed))),
+    request: <T>(path: string, init?: RequestInit) => guard(() => withTimeout(init, (timed) => client.request<T>(path, timed))),
   };
 }
