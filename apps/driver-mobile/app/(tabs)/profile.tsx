@@ -8,7 +8,7 @@ export default function Profile() {
     <ProfileScreen
       data={mockProfile}
       onSettings={() => router.push("/app-settings")}
-      onNotifications={() => console.log("notifications")}
+      onNotifications={() => router.push("/notifications")}
       onVehicleDetails={() => console.log("vehicle and shift details")}
       onHelp={() => console.log("help and dispatcher contact")}
       onEndShift={() => {
