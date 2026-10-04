@@ -36,7 +36,7 @@ const STOPS_CHILDREN = [
 ];
 const SYNC_CHILDREN = ["sync-complete", "route-conflict", "photo-attention"];
 const TODAY_CHILDREN = ["today-reefer-fault"];
-const PROFILE_CHILDREN = ["app-settings", "notifications"];
+const PROFILE_CHILDREN = ["app-settings", "notifications", "vehicle-shift"];
 
 export function AppTabBar({ state, navigation }: TabBarProps) {
   const insets = useSafeAreaInsets();

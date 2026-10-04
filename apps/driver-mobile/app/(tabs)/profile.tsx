@@ -9,7 +9,7 @@ export default function Profile() {
       data={mockProfile}
       onSettings={() => router.push("/app-settings")}
       onNotifications={() => router.push("/notifications")}
-      onVehicleDetails={() => console.log("vehicle and shift details")}
+      onVehicleDetails={() => router.push("/vehicle-shift")}
       onHelp={() => console.log("help and dispatcher contact")}
       onEndShift={() => {
         // TODO(feature/driver-api-integration): confirm, check the outbox is empty, then clear the session
