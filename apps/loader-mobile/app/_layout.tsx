@@ -4,6 +4,10 @@ import { SQLiteProvider } from 'expo-sqlite';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { Text, View } from 'react-native';
 import { initializeDatabase } from '../src/storage/database';
+import { DialogProvider } from '../src/features/dialogs/DialogProvider';
+import { AuthGate, AuthProvider } from '../src/services/auth';
+import { SyncProvider } from '../src/sync/SyncProvider';
+
 class StorageBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
   state = { failed: false };
   static getDerivedStateFromError() { return { failed: true }; }
@@ -12,6 +16,27 @@ class StorageBoundary extends Component<{ children: ReactNode }, { failed: boole
     return this.props.children;
   }
 }
+
 export default function RootLayout() {
-  return <SafeAreaProvider><SafeAreaView style={{ flex: 1 }}><StorageBoundary><SQLiteProvider databaseName="waypoint-loader.db" onInit={initializeDatabase}><Stack><Stack.Screen name="index" options={{ title: 'Waypoint Loader' }} /></Stack></SQLiteProvider></StorageBoundary></SafeAreaView></SafeAreaProvider>;
+  return (
+    <SafeAreaProvider>
+      <SafeAreaView style={{ flex: 1 }}>
+        <StorageBoundary>
+          <SQLiteProvider databaseName="waypoint-loader.db" onInit={initializeDatabase}>
+            <AuthProvider>
+              <SyncProvider>
+              <DialogProvider>
+                <AuthGate />
+                <Stack screenOptions={{ headerShown: false }}>
+                  <Stack.Screen name="index" />
+                  <Stack.Screen name="tabs" />
+                </Stack>
+              </DialogProvider>
+              </SyncProvider>
+            </AuthProvider>
+          </SQLiteProvider>
+        </StorageBoundary>
+      </SafeAreaView>
+    </SafeAreaProvider>
+  );
 }

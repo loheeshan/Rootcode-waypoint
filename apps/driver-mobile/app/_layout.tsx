@@ -1,9 +1,14 @@
-import { Component, type ReactNode } from 'react';
+import { useEffect } from 'react';
 import { Stack } from 'expo-router';
-import { SQLiteProvider } from 'expo-sqlite';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
+import * as SplashScreen from 'expo-splash-screen';
+import { Component, type ReactNode } from 'react';
 import { Text, View } from 'react-native';
+import { SQLiteProvider } from 'expo-sqlite';
+import { AuthGate, AuthProvider } from '../src/services/auth';
 import { initializeDatabase } from '../src/storage/database';
+import { SyncProvider } from '../src/sync/SyncProvider';
+
 class StorageBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
   state = { failed: false };
   static getDerivedStateFromError() { return { failed: true }; }
@@ -12,6 +17,26 @@ class StorageBoundary extends Component<{ children: ReactNode }, { failed: boole
     return this.props.children;
   }
 }
+
+// Keep the native splash up until our React splash has mounted.
+SplashScreen.preventAutoHideAsync().catch(() => {});
+
 export default function RootLayout() {
-  return <SafeAreaProvider><SafeAreaView style={{ flex: 1 }}><StorageBoundary><SQLiteProvider databaseName="waypoint-driver.db" onInit={initializeDatabase}><Stack><Stack.Screen name="index" options={{ title: 'Waypoint Driver' }} /></Stack></SQLiteProvider></StorageBoundary></SafeAreaView></SafeAreaProvider>;
+  useEffect(() => {
+    SplashScreen.hideAsync().catch(() => {});
+  }, []);
+
+  return (
+    <StorageBoundary>
+      <SQLiteProvider databaseName="waypoint-driver.db" onInit={initializeDatabase}>
+        <AuthProvider>
+          <SyncProvider>
+            <StatusBar style="light" />
+            <AuthGate />
+            <Stack screenOptions={{ headerShown: false, animation: 'fade' }} />
+          </SyncProvider>
+        </AuthProvider>
+      </SQLiteProvider>
+    </StorageBoundary>
+  );
 }

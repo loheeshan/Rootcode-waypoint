@@ -1,0 +1,81 @@
+/* Store Manager styles — every selector is scoped under .store-app so Dispatcher/other routes are unaffected */
+.store-app{/* PALETTE: edit these tokens to match Figma hex values exactly */
+--bg:#f9fafb;--card:#ffffff;--tx:#101828;--mu:#667085;--bd:#e4e7ec;
+--pr:#1f4fd8;--bb:#eff4ff;
+--gn:#067647;--gb:#ecfdf3;
+--am:#b54708;--ab:#fffaeb;
+--rd:#b42318;--rb:#fef3f2}
+.store-app,.store-app *{box-sizing:border-box}
+.store-app{min-height:100vh;margin:0}
+.store-app{font:14px/1.45 Inter,system-ui,sans-serif;background:var(--bg);color:var(--tx);padding-top:env(safe-area-inset-top,0)}
+.store-app #app{display:flex;min-height:100%}
+.store-app aside{width:220px;background:var(--card);border-right:1px solid var(--bd);padding:20px 12px;display:flex;flex-direction:column;gap:2px;flex:none}
+.store-app .logo{font-weight:700;font-size:20px;color:var(--pr);padding:0 8px}
+.store-app .role{font-size:11px;letter-spacing:.08em;color:var(--mu);padding:0 8px 4px}
+.store-app .ctx{font-size:12px;color:var(--mu);padding:0 8px 14px}
+.store-app nav a{display:block;padding:8px 10px;border-radius:8px;color:var(--tx);text-decoration:none;cursor:pointer}
+.store-app nav a.on{background:var(--bb);color:var(--pr);font-weight:600}
+.store-app nav a:hover{background:var(--bg)}
+.store-app main{flex:1;min-width:0}
+.store-app header{display:flex;justify-content:flex-end;gap:12px;align-items:center;padding:12px 28px;background:var(--card);border-bottom:1px solid var(--bd)}
+.store-app .av{width:30px;height:30px;border-radius:50%;background:var(--pr);color:#fff;display:grid;place-items:center;font-weight:600}
+.store-app .bell{position:relative;cursor:pointer;background:none;border:0;font-size:16px;color:var(--tx)}
+.store-app .dot{position:absolute;top:-4px;right:-6px;background:var(--rd);color:#fff;border-radius:9px;font-size:10px;padding:0 5px}
+.store-app .pg{padding:24px 28px;max-width:1100px}
+.store-app h1{font-size:24px;margin:0 0 2px}
+.store-app h2{font-size:16px;margin:0 0 10px}
+.store-app .sub{color:var(--mu);margin:0 0 18px}
+.store-app .card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px;margin-bottom:14px}
+.store-app .row{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.store-app .sp{justify-content:space-between}
+.store-app .g{display:grid;gap:14px}
+.store-app .g2{grid-template-columns:1.6fr 1fr}
+.store-app .g4{grid-template-columns:repeat(4,1fr)}
+.store-app button,.store-app .btn{font:inherit;border-radius:8px;padding:8px 14px;border:1px solid var(--bd);background:var(--card);color:var(--tx);cursor:pointer}
+.store-app button:focus-visible,.store-app a:focus-visible,.store-app input:focus-visible,.store-app select:focus-visible,.store-app textarea:focus-visible{outline:2px solid var(--pr);outline-offset:2px}
+.store-app .p{background:var(--pr);color:#fff;border-color:var(--pr)}
+.store-app .d{color:var(--rd)}
+.store-app button:disabled{opacity:.5;cursor:not-allowed}
+.store-app .b{display:inline-block;padding:2px 9px;border-radius:99px;font-size:12px;font-weight:600}
+.store-app .Active,.store-app .Planned{background:var(--bb);color:var(--pr)}
+.store-app .Needs{background:var(--rb);color:var(--rd)}
+.store-app .Deferred{background:var(--ab);color:var(--am)}
+.store-app .Delivered,.store-app .Confirmed{background:var(--gb);color:var(--gn)}
+.store-app .al{border-radius:10px;padding:12px 14px;margin-bottom:14px;border:1px solid var(--bd)}
+.store-app .al.i{background:var(--bb)}
+.store-app .al.w{background:var(--ab)}
+.store-app .al.e{background:var(--rb)}
+.store-app .al.s{background:var(--gb)}
+.store-app .al b{display:block}
+.store-app .tab{display:flex;gap:6px;margin-bottom:12px}
+.store-app .tab button.on{background:var(--pr);color:#fff;border-color:var(--pr)}
+.store-app .q{display:flex;align-items:center;gap:4px}
+.store-app .q button{width:30px;padding:4px}
+.store-app .q input{width:56px;text-align:center;padding:6px;border:1px solid var(--bd);border-radius:8px;background:var(--card);color:var(--tx)}
+.store-app .pr{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--bd)}
+.store-app .pr:last-child{border:0}
+.store-app .m{color:var(--mu);font-size:12px}
+.store-app .kv{display:flex;justify-content:space-between;padding:4px 0}
+.store-app .ol{cursor:pointer}
+.store-app .ol:hover{border-color:var(--pr)}
+.store-app input[type=text],.store-app input[type=email],.store-app input[type=password],.store-app select,.store-app textarea{width:100%;padding:9px;border:1px solid var(--bd);border-radius:8px;background:var(--card);color:var(--tx);font:inherit}
+.store-app .ov{position:fixed;inset:0;background:rgba(0,0,0,.5);display:grid;place-items:center;z-index:9;padding:16px}
+.store-app .md{background:var(--card);border-radius:14px;padding:22px;width:460px;max-width:100%;max-height:90vh;overflow:auto}
+.store-app .tl{list-style:none;padding:0;margin:0}
+.store-app .tl li{padding:6px 0 6px 22px;position:relative;color:var(--mu)}
+.store-app .tl li:before{content:"";position:absolute;left:0;top:11px;width:10px;height:10px;border-radius:50%;border:2px solid var(--bd)}
+.store-app .tl li.ok{color:var(--tx)}
+.store-app .tl li.ok:before{background:var(--gn);border-color:var(--gn)}
+.store-app .es{text-align:center;padding:50px 16px}
+.store-app .es h2{font-size:20px}
+.store-app .un{border-left:3px solid var(--pr)}
+.store-app .sig{max-width:380px;margin:8vh auto}
+.store-app #app{min-height:100vh}
+
+/* ---- Neutralise the repo's global element rules inside the Store Manager (desktop only) ---- */
+.store-app main{max-width:none;margin:0;padding:0}
+.store-app nav{display:block;flex-wrap:nowrap;gap:0}
+.store-app p{max-width:none;color:inherit;line-height:inherit}
+.store-app h1,.store-app h2,.store-app h3{line-height:1.45}
+.store-app a{color:var(--pr)}
+.store-app nav a{text-decoration:none}

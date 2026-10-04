@@ -1,0 +1,102 @@
+.fleet-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+
+  padding-top: 95px;
+
+  background: rgba(15, 23, 42, 0.28);
+}
+
+.fleet-modal {
+  position: relative;
+
+  width: 720px;
+  max-width: calc(100% - 40px);
+
+  padding: 18px;
+
+  background: #ffffff;
+  border-radius: 12px;
+
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.2);
+}
+
+.fleet-modal-item {
+  padding: 17px;
+  margin-bottom: 14px;
+
+  background: #f7f9fc;
+  border-radius: 9px;
+}
+
+.fleet-modal-item h3 {
+  margin: 0 0 9px;
+
+  color: #172033;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.fleet-modal-item p {
+  margin: 0;
+
+  color: #59677d;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.fleet-danger {
+  background: #fff1f3;
+}
+
+.fleet-danger h3 {
+  color: #d7194b;
+}
+
+.fleet-modal-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.fleet-modal-actions button {
+  height: 37px;
+  padding: 0 13px;
+
+  border: 1px solid #d8e0eb;
+  border-radius: 7px;
+
+  background: #ffffff;
+  color: #263650;
+
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.fleet-modal-actions .fleet-primary {
+  background: #2458d8;
+  border-color: #2458d8;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.fleet-close {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+
+  width: 30px;
+  height: 30px;
+
+  border: 0;
+  background: transparent;
+
+  color: #718096;
+  font-size: 22px;
+
+  cursor: pointer;
+}

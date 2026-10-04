@@ -2,6 +2,9 @@
 
 Branch: `feature/db-users-roles`
 
+This guide records the identity increment. Later migrations are also included;
+see the [root README](../../README.md) for the current revision and setup.
+
 This increment adds three identity tables and the four role definitions. It does
 not add login or create user accounts. It is organized into four commits so each
 change can be reviewed and pushed separately.
@@ -43,9 +46,11 @@ uv run pytest -q
 uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Expected migration: `0001_user_roles (head)`. `alembic check` should report no new
-upgrade operations. The first migration creates three tables and four role rows,
-plus Alembic's version table. There are no user records. Database migrations are
+At the identity-only revision, the expected migration was `0001_user_roles (head)`.
+In newer checkouts, `upgrade head` also applies later migrations; see the
+[root README](../../README.md) for the expected head. `alembic check` should report no
+new upgrade operations. The first migration creates three tables and four role
+rows, plus Alembic's version table. It inserts no user records. Database migrations are
 explicit commands and are not executed by `/health` or `/ready`.
 
 If you run the API through Docker instead of a local Python environment:
@@ -100,5 +105,6 @@ foundation. Review CI and merge this increment into `dev` before starting the
 next backend branch. See [GITHUB-SETUP.md](GITHUB-SETUP.md) for the repository's
 pull request workflow.
 
-Next planned increment: depot, outlet, and vehicle tables, following the database
-commit order in [COMMIT-PLAN.md](COMMIT-PLAN.md).
+The next increment, depot, outlet, and vehicle tables, is documented in
+[Backend step 2](BACKEND-STEP-02.md), following the database commit order in
+[COMMIT-PLAN.md](COMMIT-PLAN.md).

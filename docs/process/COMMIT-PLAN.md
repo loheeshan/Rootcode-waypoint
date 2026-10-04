@@ -1,5 +1,68 @@
 # Commit Plan
 
+## Backend delivery queue (2026-10-04)
+
+This is the current implementation queue; the original feature lists below also
+include completed work and frontend tasks. Use one reviewable commit per batch,
+with `feature/` branches. The user commits and pushes after reviewing each batch.
+
+**Completed:** draft optimization (`feature/planning-optimize-api`), batch 1
+publishing (`feature/planning-publish`), batch 2 loading (`feature/loader-workflow`)
+batch 3 Driver delivery (`feature/driver-delivery`), batch 4 Store receipts
+(`feature/store-receipts`) and batch 5 offline sync (`feature/offline-sync`).
+
+**Current batch (6):** `feature/dispatcher-operations` — depot-scoped live summary,
+trip progress, exceptions (missing/damaged loads, failed stops, pending receipts,
+sync conflicts) and audit history written atomically with operational mutations;
+migration `0014_audit_events`.
+
+Open follow-up: orders left `OUT_FOR_DELIVERY` (failed stops) or `LOADING`
+(missing/damaged) after a trip completes are now visible as Dispatcher exceptions;
+re-planning/resolving them needs a specified override or re-plan workflow.
+
+Frontend follow-up (not a backend batch): Driver/Loader Expo SQLite outbox, NetInfo
+reconnect, relaunch recovery and pending/synced UI using `POST /sync/events`.
+
+**One backend batch remains after this commit (7):**
+
+| Next | Suggested branch | Commit scope / completion check |
+|---|---|---|
+| 1 | `feature/planning-publish` | Publish one effective immutable revision; scoped active Driver assignments; authoritative reservation storage/balances; lock/revalidate operational trip limits and weekly fuel; order transitions and conflict tests. |
+| 2 | `feature/loader-workflow` | Loading/event storage and scoped trip/loading APIs; shortfall/damage records; guarded loading-to-ready transition. |
+| 3 | `feature/driver-delivery` | Assigned-trip/stop reads, guarded start/delivery/failure transitions; proof-of-delivery upload/read stored in PostgreSQL with authorization and size/type limits. |
+| 4 | `feature/store-receipts` | Receipt storage; outlet-scoped receipt confirmation on delivered orders; duplicate protection and receipt status propagation. |
+| 5 | `feature/offline-sync` | Idempotent event ingestion and persisted sync receipts; replay/conflict rules for Driver/Loader events; restart/retry/reconnect server tests. Mobile SQLite/outbox UI remains client work. |
+| 6 | `feature/dispatcher-operations` | Depot-scoped live operation summaries, loading/delivery/receipt exceptions and persistent audit history. |
+| 7 | `feature/backend-integration` | Complete synthetic operational seed data, Store-to-Dispatcher-to-Loader-to-Driver-to-Store API integration tests, contract verification and frontend connection walkthrough. |
+
+These are planned batches, not a guaranteed fixed count; integration findings may
+require fixes. The user approved clearly labelled synthetic route data, now included
+as `data/seed/route-inputs.synthetic.json`. Real road data remains unavailable;
+the demo snapshot is not automatically mapped to database IDs or used for publication.
+The optimization service loads the whole eligible depot/day input set; publishing
+must reload and revalidate it against current operational work and reservations.
+
+Frontend connection can start now with auth, Store orders, Dispatcher orders,
+fleet inputs, plan workspace, compatibility and saved optimization contracts.
+Publishing, loading, delivery, receipts and sync need the batches above. Finishing
+these backend batches does not itself implement or connect every frontend screen.
+
+## Integration steps (frontend <-> backend, 2026-10-04)
+
+Branches and evidence: [INTEGRATION-HANDOFF.md](../testing/INTEGRATION-HANDOFF.md).
+
+| Step | Branch | Status |
+|---|---|---|
+| 1 Demo foundation | `feature/integration-demo-foundation` | Merged (#202) |
+| 2 Auth | `feature/integration-demo-auth` | Merged (#204) |
+| 3 Store web | `feature/integration-store-web` | Merged (#205) |
+| 4 Dispatcher web | `feature/integration-dispatcher-web` | Merged (#208) |
+| 5 Loader online | `feature/integration-loader-mobile` | Merged (#206) |
+| 6 Driver online | `feature/integration-driver-mobile` | Merged (#207) |
+| 7 Loader offline | `feature/integration-loader-offline` | Merged (#209) |
+| 8 Driver offline | `feature/integration-driver-offline` | Merged (#210) |
+| 9 Acceptance + demo handoff | `feature/integration-release-validation` | In review: `test(integration): verify complete role workflows and document demo setup` |
+
 ## Repository foundation
 
 Branch:
