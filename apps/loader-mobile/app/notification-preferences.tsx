@@ -22,7 +22,8 @@ export default function NotificationPreferencesScreen() {
     // (SecureStore or Expo SQLite).
     // Whatever is chosen, critical loading changes must stay visible in the app.
     console.log('notification preference', preference);
-    leave();
+    setVisible(false);
+    router.replace('/preference-saved');
   };
 
   return (
