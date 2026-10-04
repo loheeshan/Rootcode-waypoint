@@ -20,10 +20,15 @@ services:
       context: .
       dockerfile: apps/api/Dockerfile
     environment:
+      APP_ENV: ${APP_ENV:-development}
       POSTGRES_HOST: postgres
       POSTGRES_DB: ${POSTGRES_DB:-waypoint}
       POSTGRES_USER: ${POSTGRES_USER:-waypoint}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-}
+      JWT_ISSUER: ${JWT_ISSUER:-waypoint-api}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:-waypoint-clients}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
       CORS_ORIGINS: '${CORS_ORIGINS:-["http://localhost:3000","http://127.0.0.1:3000"]}'
     ports:
       - "${API_PORT:-8000}:8000"

@@ -129,6 +129,41 @@ Hard rules:
 - vehicle availability
 - served/deferred
 
+The individual-order compatibility stage is implemented in
+`apps/api/app/planning/compatibility.py`, with a depot-scoped live preview at
+`GET /api/v1/plans/{plan_id}/compatibility`. It checks depot, exact-day vehicle
+availability, temperature/access compatibility and each order's weight/volume.
+It returns candidate vehicles and all pair exclusions, without allocating shared
+capacity or writing outcomes. Preview pagination is not a complete solver input
+snapshot. Candidate status is not route feasibility.
+
+The next stage, `apps/api/app/planning/allocation.py`, implements capacity-only
+OR-Tools CP-SAT allocation: whole orders, combined weight/volume, compatibility,
+and at most two candidate trip slots per vehicle. It maximizes allocated order
+count then minimizes trips. The result includes every unallocated order and
+reports whether that capacity objective is proven optimal. The API below orchestrates
+this pure engine; standalone capacity results cannot be published.
+
+`route_inputs.py` imports explicit static travel/service/window/fuel snapshots.
+`routing.py` sequences those fixed capacity groups using CP-SAT circuits, including
+return legs, turnaround, full service within each window and rounded per-trip fuel
+against a shared weekly balance. It can swap the order of two trip groups. An
+approved synthetic example has explicit provenance and never changes database
+state. Infeasible groups require repair/reallocation in the optimizer;
+they are not evidence that individual orders must be deferred. Authoritative
+reservation loading and existing operational trip checks remain pending. The new
+optimization API loads scoped master/availability/consumed-fuel data, tries capacity
+allocation, repairs groups with bounded insertion, independently validates the
+snapshot, and saves a new draft revision plus complete outcomes and input/result
+snapshots atomically. Request UUIDs make retries idempotent. PostgreSQL plan/depot
+and fleet locks protect revision numbering and fleet inputs. Fuel reservations of
+published trips (today onward) are added to consumed totals. Standalone scheduler
+results keep `is_complete_plan_validation: false`; saved API results report
+`VALIDATED_SNAPSHOT` with `publishable: false`. The publish API reloads current
+inputs, reruns the independent validator, checks driver eligibility, vehicle/driver
+overlaps and the two-trip day limit, then atomically publishes one effective revision
+with driver assignments, fuel reservations and `PLANNED`/`DEFERRED` order statuses.
+
 ## Published plan rule
 
 Published plans are immutable. Changes create new plan revisions.

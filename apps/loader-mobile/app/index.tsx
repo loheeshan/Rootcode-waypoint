@@ -1,6 +1,5 @@
-import { useNetInfo } from '@react-native-community/netinfo';
-import { StarterScreen } from '@waypoint/mobile-ui';
-export default function Home() {
-  const network = useNetInfo();
-  return <StarterScreen role="Loader" online={network.isConnected} />;
+import { Redirect } from 'expo-router';
+
+export default function Index() {
+  return <Redirect href="/tabs/today" />;
 }

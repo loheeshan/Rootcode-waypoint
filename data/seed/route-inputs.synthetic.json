@@ -1,0 +1,52 @@
+{
+  "depot_id": "00000000-0000-0000-0000-000000000001",
+  "delivery_date": "2026-10-05",
+  "source": "SYNTHETIC standalone routing example; invented distances, times and fuel totals",
+  "is_synthetic": true,
+  "outlets": [
+    {
+      "outlet_id": "00000000-0000-0000-0000-00000000000a",
+      "window_open": "08:00:00",
+      "window_close": "18:00:00",
+      "service_seconds": 600
+    },
+    {
+      "outlet_id": "00000000-0000-0000-0000-000000000014",
+      "window_open": "09:00:00",
+      "window_close": "11:00:00",
+      "service_seconds": 900
+    }
+  ],
+  "orders": [
+    {
+      "order_id": "00000000-0000-0000-0000-000000000001",
+      "outlet_id": "00000000-0000-0000-0000-00000000000a"
+    },
+    {
+      "order_id": "00000000-0000-0000-0000-000000000002",
+      "outlet_id": "00000000-0000-0000-0000-000000000014"
+    }
+  ],
+  "vehicles": [
+    {
+      "vehicle_id": "00000000-0000-0000-0000-000000000064",
+      "earliest_departure": "2026-10-05T07:30:00+05:30",
+      "latest_return": "2026-10-05T18:00:00+05:30",
+      "turnaround_seconds": 900,
+      "available_dates": ["2026-10-05"],
+      "km_per_l": "5.000",
+      "fuel_week_start": "2026-10-05",
+      "weekly_fuel_quota_l": "20.000",
+      "fuel_used_l": "2.000",
+      "fuel_reserved_l": "1.000"
+    }
+  ],
+  "legs": [
+    {"from_outlet_id": null, "to_outlet_id": "00000000-0000-0000-0000-00000000000a", "distance_km": "5.000", "travel_seconds": 900},
+    {"from_outlet_id": "00000000-0000-0000-0000-00000000000a", "to_outlet_id": null, "distance_km": "6.000", "travel_seconds": 1000},
+    {"from_outlet_id": null, "to_outlet_id": "00000000-0000-0000-0000-000000000014", "distance_km": "8.000", "travel_seconds": 1200},
+    {"from_outlet_id": "00000000-0000-0000-0000-000000000014", "to_outlet_id": null, "distance_km": "7.000", "travel_seconds": 1100},
+    {"from_outlet_id": "00000000-0000-0000-0000-00000000000a", "to_outlet_id": "00000000-0000-0000-0000-000000000014", "distance_km": "3.000", "travel_seconds": 600},
+    {"from_outlet_id": "00000000-0000-0000-0000-000000000014", "to_outlet_id": "00000000-0000-0000-0000-00000000000a", "distance_km": "4.000", "travel_seconds": 750}
+  ]
+}

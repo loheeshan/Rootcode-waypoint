@@ -10,12 +10,65 @@ Monorepo boilerplate for the delivery operations application described in the su
 - Five shared TypeScript packages, a credential-storage-free API client, matching status types, starter UI components and provisional design tokens.
 - pnpm and uv lockfiles, checks, GitHub Actions, Docker Compose, environment templates, and the original architecture/process documents.
 
-The first backend increment adds user/role models and migration `0001_user_roles`,
-including the four role definitions. Authentication/RBAC, remaining domain tables,
-business endpoints, optimization, account/dataset seed imports, POD capture, offline
+The backend includes identity, fleet, order and planning models with migrations
+`0001_user_roles`, `0002_fleet_foundation`, `0003_orders`, `0004_user_scopes` and
+`0005_planning_foundation`, `0006_plan_outcomes`, `0007_fleet_operations`,
+`0008_plan_optimizations`, `0009_plan_publications`, `0010_load_events`,
+`0011_delivery_events`, `0012_receipt_confirmations`, `0013_sync_events` and
+`0014_audit_events`.
+They create users, roles, user-role assignments, depots, outlets, vehicles,
+orders, user-outlet assignments, user-depot assignments, plans, plan revisions,
+trips, trip stops, plan assignments, deferral decisions, daily vehicle availability
+and daily fuel consumption totals, and seed the
+four role definitions. JSON login (`POST /api/v1/auth/login`), current user
+(`GET /api/v1/me`), Argon2id passwords, signed access tokens and reusable role
+guards and outlet/depot scope helpers are implemented. Login and `/me` return
+current role and resource assignments. See the [auth setup guide](apps/api/app/auth/README.md)
+to configure the signing key and the [API contract](docs/architecture/API-CONTRACTS.md#auth)
+for request/response fields. An explicit demo seed command creates the four role
+accounts with a password you choose. A separate resource seed adds a synthetic
+depot, two outlets, two vehicles and demo account assignments; sign-in screens
+are not connected yet.
+Store order creation, listing and detail endpoints enforce outlet access and the
+16:00 Sri Lanka submission cutoff. See the [order API guide](apps/api/app/orders/README.md#store-order-api).
+Dispatcher order listing and fleet reads now enforce depot assignments, with
+filters, pagination and shared frontend response types. See the
+[Dispatcher contract](docs/architecture/API-CONTRACTS.md#dispatcher).
+Dispatchers can read and conditionally create/replace daily vehicle availability
+and consumed-fuel totals in their assigned depots. Missing records mean unknown,
+not available or zero usage. Draft optimization checks those inputs. See the
+[fleet input API](apps/api/app/fleet/README.md#daily-input-api) for the GET/PUT flow.
+Planning storage supports depot/day workspaces, revisions, vehicle/driver trip
+references and ordered stops. Order outcomes can link served orders to stops or
+store deferral explanations, with database checks for reference consistency and
+one outcome per order/revision. Dispatcher plan create/list/detail now provide
+draft workspaces and saved revision counts. A compatibility preview checks each
+confirmed order against depot vehicles using exact-day availability, temperature,
+van-only access and individual weight/volume limits. Candidate vehicles still
+need route, fuel and combined-load validation. The capacity-only CP-SAT engine now
+allocates whole orders within combined weight/volume limits and two trip slots per
+vehicle, with complete allocated/unallocated accounting. The route scheduler sequences groups against imported travel
+times, outlet windows, depot turnaround and supplied weekly fuel balances. An
+explicitly synthetic JSON example is included. Dispatcher optimization now loads
+scoped database inputs, repairs infeasible groups with bounded insertion, independently
+validates the snapshot and atomically saves a draft revision. Request IDs protect
+retries; a result-detail API returns the original saved snapshot. Publishing
+revalidates a saved draft against current inputs, assigns active depot Drivers,
+stores fuel reservations and moves orders to `PLANNED`/`DEFERRED`. Loaders in the
+trip's depot record per-order loaded/missing/damaged events and mark trips ready
+(see the [loading guide](apps/api/app/loading/README.md)). Assigned Drivers start ready
+trips, record arrivals, upload proof-of-delivery photos stored in PostgreSQL and
+deliver or fail stops ([delivery guide](apps/api/app/delivery/README.md)). Store Managers
+confirm receipt of delivered orders ([receipts guide](apps/api/app/receipts/README.md)).
+Driver/Loader apps can replay queued events through idempotent batch sync
+([sync guide](apps/api/app/sync/README.md)). Dispatchers read depot-scoped live
+operations, exceptions and audit history ([operations guide](apps/api/app/audit/README.md));
+see the [planning guide](apps/api/app/planning/README.md)
+and [remaining backend batches](docs/process/COMMIT-PLAN.md#backend-delivery-queue-2026-10-04).
+Remaining operational endpoints and domain tables, republishing, competition dataset imports, POD capture, offline
 outbox processing and end-to-end workflows are **not implemented**. Public starter
-pages contain no real data. `scripts/seed.py` and `scripts/validate-plan.py`
-intentionally exit with a clear message until implemented.
+pages contain no real data. `scripts/seed.py --demo` delegates to the account seed;
+`scripts/validate-plan.py` remains a placeholder.
 
 ## Structure
 
@@ -81,7 +134,7 @@ Set-Location D:\Rootcode
 corepack pnpm dev:web
 ```
 
-Open [web](http://localhost:3000), [API docs](http://localhost:8000/docs), [liveness](http://localhost:8000/health), and [database readiness](http://localhost:8000/ready). Liveness works without a database; readiness returns 503 when PostgreSQL cannot be reached. The migration creates the identity tables and four role definitions; no demo accounts exist yet.
+Open [web](http://localhost:3000), [API docs](http://localhost:8000/docs), [liveness](http://localhost:8000/health), and [database readiness](http://localhost:8000/ready). Liveness works without a database; readiness returns 503 when PostgreSQL cannot be reached. Migrations create the identity, fleet and order tables and four role definitions. No demo accounts, fleet records or orders are inserted.
 
 Terminal 3 — Driver or Loader:
 
@@ -102,9 +155,54 @@ After creating root `.env` and starting Docker Desktop:
 docker compose up --build
 # In another terminal after the services are healthy:
 docker compose exec api alembic upgrade head
+docker compose exec api alembic current
+docker compose exec api alembic check
 ```
 
 This starts PostgreSQL, FastAPI and the web app. Mobile apps run separately. The Compose configuration is for local development; the web's API URL is compiled at build time. `docker compose down` preserves the named database volume. Migrations are explicit commands; the API does not create or alter tables at startup.
+
+Current migration: `0014_audit_events (head)`. Apply migrations after
+rebuilding the API. Users start with no outlet/depot assignments until
+explicitly configured, including through the demo resource seed below.
+For API-only startup and the
+Windows host-port workaround, see [Backend step 2](docs/process/BACKEND-STEP-02.md).
+
+## Demo login accounts
+
+After rebuilding the API and applying migrations, run:
+
+```powershell
+docker compose exec api python -m app.auth.seed --demo
+```
+
+Enter and confirm your own password when prompted. This creates
+`dispatcher@waypoint.demo`, `store@waypoint.demo`, `loader@waypoint.demo` and
+`driver@waypoint.demo`; no password is stored in the repository. Re-runs preserve
+existing accounts and permissions. The command permits only `APP_ENV=development`
+or `test`. Configure `JWT_SECRET_KEY` before testing login in the API docs.
+See [the demo setup guide](apps/api/app/auth/README.md#create-demo-accounts) for
+local Python commands and verification.
+
+To create the synthetic demo fleet and account assignments, run afterward:
+
+```powershell
+docker compose exec api python -m app.fleet.seed --demo
+```
+
+This adds one depot, two outlets, two vehicles and four account assignments.
+It requires the four active demo accounts with their expected roles. Re-running
+preserves matching data and restores missing demo assignments; conflicting rows
+abort without overwriting them. Orders and trips are not seeded. See the
+[resource setup guide](apps/api/app/fleet/README.md#synthetic-demo-data) for details.
+
+### Demo scenarios and login check
+
+After both seeds, `docker compose exec api python -m app.demo.check_logins` verifies all four
+demo logins against the running API (it prompts for the password and prints no secrets), and
+`docker compose exec api python -m app.demo.scenario --stage plan|published|ready|operations`
+creates a coherent demo day through the real services with labelled synthetic travel data.
+See the [integration handoff](docs/testing/INTEGRATION-HANDOFF.md#demo-data) for stages,
+dates, rerun rules and emulator/LAN API settings.
 
 ## Checks
 
@@ -117,13 +215,16 @@ uv run mypy app
 uv run pytest
 ```
 
-`pnpm build` builds the web app. `pnpm export:mobile` bundles Android and iOS JavaScript for both apps; it does not produce APK/IPA binaries. Root tests cover the shared client, and API tests cover health, readiness, CORS, identity constraints, migration rollback/reapply, and model/migration alignment. Add feature tests as each workflow is implemented.
+`pnpm build` builds the web app. `pnpm export:mobile` bundles Android and iOS JavaScript for both apps; it does not produce APK/IPA binaries. Root tests cover the shared client, and API tests cover health, readiness, CORS, identity, fleet and order constraints, migration rollback/reapply, model/migration alignment, password/token validation, JSON login, current-user access, the four-role permission matrix, seed rollback and repeatable demo login. Add feature tests as each workflow is implemented.
 
 ## Next implementation branches
 
 Follow [CONTRIBUTING.md](CONTRIBUTING.md) and [the commit plan](docs/process/COMMIT-PLAN.md): approved design tokens/components, API schemas, database models and migrations, authentication/role guards, then role workflows. Register new models in `apps/api/app/db/models.py` before running `uv run alembic revision --autogenerate -m "description"` and review the generated migration before `uv run alembic upgrade head`.
 
-The first backend increment and its commit/push commands are documented in [Backend step 1](docs/process/BACKEND-STEP-01.md).
+The backend increments and their commit/push commands are documented in
+[Backend step 1: identity](docs/process/BACKEND-STEP-01.md) and
+[Backend step 2: fleet](docs/process/BACKEND-STEP-02.md). The
+[order module guide](apps/api/app/orders/README.md) covers the order migration.
 
 The canonical architecture is in [docs/architecture](docs/architecture/SYSTEM-ARCHITECTURE.md). Original `Main/` documents are retained as references; detailed role screens there and in `docs/roles` describe future implementation, not completed functionality. Starter token values are not claimed to match Figma.
 
@@ -131,9 +232,9 @@ The canonical architecture is in [docs/architecture](docs/architecture/SYSTEM-AR
 
 Follow [GITHUB-SETUP.md](docs/process/GITHUB-SETUP.md) for initial repository setup.
 Develop on feature branches, review changes through pull requests into `dev`,
-and promote reviewed releases to `main`. The identity database increment uses
-`feature/db-users-roles`; its four commits are described in
-[Backend step 1](docs/process/BACKEND-STEP-01.md).
+and promote reviewed releases to `main`. The fleet database increment uses
+`feature/db-fleet-foundation`; its three commits are described in
+[Backend step 2](docs/process/BACKEND-STEP-02.md).
 
 ## Dependency references
 

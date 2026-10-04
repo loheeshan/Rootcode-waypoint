@@ -1,6 +1,24 @@
-import { useNetInfo } from '@react-native-community/netinfo';
-import { StarterScreen } from '@waypoint/mobile-ui';
-export default function Home() {
-  const network = useNetInfo();
-  return <StarterScreen role="Driver" online={network.isConnected} />;
+import { useEffect } from 'react';
+import { Redirect, useRouter } from 'expo-router';
+import { SplashScreen } from '../src/features/splash/SplashScreen';
+import { useBootstrap } from '../src/features/splash/useBootstrap';
+
+export default function Index() {
+  const router = useRouter();
+  const { progress, statusText, cachedOutlets, destination } = useBootstrap();
+
+  useEffect(() => {
+    if (destination) router.replace(destination);
+  }, [destination, router]);
+
+  return (
+    // <SplashScreen
+    //   progress={progress}
+    //   statusText={statusText}
+    //   cachedOutlets={cachedOutlets}
+    // />
+    //<Redirect href="/start-trip" />
+    //<Redirect href="/navigate-outlet" />
+    <Redirect href="/stops/navigation-preview" />
+  );
 }
