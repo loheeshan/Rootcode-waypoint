@@ -135,8 +135,15 @@ The individual-order compatibility stage is implemented in
 availability, temperature/access compatibility and each order's weight/volume.
 It returns candidate vehicles and all pair exclusions, without allocating shared
 capacity or writing outcomes. Preview pagination is not a complete solver input
-snapshot. Route timing, fuel, combined capacity, trip limits, allocation and the
-independent validator remain future work; candidate status is not route feasibility.
+snapshot. Candidate status is not route feasibility.
+
+The next stage, `apps/api/app/planning/allocation.py`, implements capacity-only
+OR-Tools CP-SAT allocation: whole orders, combined weight/volume, compatibility,
+and at most two candidate trip slots per vehicle. It maximizes allocated order
+count then minimizes trips. The result includes every unallocated order and
+reports whether that capacity objective is proven optimal. It has no HTTP route
+or persistence yet. Route timing, fuel, existing operational trips and independent
+full-plan validation remain pending; capacity results cannot be published.
 
 ## Published plan rule
 
