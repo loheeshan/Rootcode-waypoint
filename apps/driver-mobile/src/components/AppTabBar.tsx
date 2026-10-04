@@ -33,6 +33,7 @@ const STOPS_CHILDREN = [
   "record-delivery",
   "could-not-deliver",
   "could-not-deliver-offline",
+  "camera-permission-denied",
 ];
 const SYNC_CHILDREN = ["sync-complete", "route-conflict", "photo-attention"];
 const TODAY_CHILDREN = ["today-reefer-fault"];
