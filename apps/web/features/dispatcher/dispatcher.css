@@ -1,0 +1,48 @@
+/* Dispatcher states and forms used with the live API (alerts, tables, sign-in).
+   Layout, cards, sidebar and navbar keep the frontend team's styles in app/globals.css. */
+
+.dx-alert { border: 1px solid #c7d7fe; background: #eff4ff; color: #1e3a8a; border-radius: 9px; padding: 10px 12px; margin: 0 0 12px; font-size: 13px; }
+.dx-alert b { display: block; margin-bottom: 2px; }
+.dx-alert.w { border-color: #fcd9a6; background: #fff8eb; color: #8a4b00; }
+.dx-alert.e { border-color: #f8b4b4; background: #fef2f2; color: #991b1b; }
+.dx-alert.s { border-color: #a7e3c4; background: #ecfdf5; color: #065f46; }
+
+.dx-state { text-align: center; padding: 28px 12px; color: #596579; }
+.dx-state h2 { font-size: 15px; margin: 0 0 6px; color: #101828; }
+.dx-state p { margin: 0 0 12px; font-size: 13px; }
+
+.dx-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.dx-row.sp { justify-content: space-between; }
+.dx-muted { color: #7b8798; font-size: 12px; }
+.dx-grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; }
+
+.dx-btn { background: white; border: 1px solid #d0d7e2; border-radius: 7px; padding: 7px 12px; font-size: 13px; cursor: pointer; color: #1f2937; }
+.dx-btn:disabled { opacity: .55; cursor: not-allowed; }
+.dx-btn.p { background: #2563eb; border-color: #2563eb; color: white; }
+.dx-btn.d { color: #b42318; border-color: #f3b8b2; }
+.dx-btn.on { background: #eff6ff; border-color: #2563eb; color: #2563eb; }
+
+.dx-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #596579; }
+.dx-field input, .dx-field select { border: 1px solid #d0d7e2; border-radius: 7px; padding: 7px 9px; font-size: 13px; color: #101828; background: white; }
+.dx-field input[aria-invalid="true"] { border-color: #d92d20; }
+
+.dx-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.dx-table th { text-align: left; font-size: 11px; color: #7b8798; font-weight: 600; padding: 8px; border-bottom: 1px solid #e4e8ee; white-space: nowrap; }
+.dx-table td { padding: 8px; border-bottom: 1px solid #f0f2f5; vertical-align: top; }
+.dx-table-wrap { overflow-x: auto; }
+
+.dx-badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 20px; background: #f1f3f6; color: #344054; white-space: nowrap; }
+.dx-badge.blue { background: #eff6ff; color: #1d4ed8; }
+.dx-badge.green { background: #ecfdf5; color: #047857; }
+.dx-badge.orange { background: #fff7ed; color: #c2410c; }
+.dx-badge.red { background: #fef2f2; color: #b42318; }
+.dx-badge.cyan { background: #ecfeff; color: #0e7490; }
+
+.dx-rules { margin: 0; padding-left: 18px; font-size: 12px; color: #475467; columns: 2; }
+.dx-kv { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; padding: 4px 0; }
+.dx-kv span { color: #7b8798; }
+
+.dx-signin { max-width: 380px; margin: 9vh auto; background: white; border: 1px solid #e4e8ee; border-radius: 12px; padding: 28px; }
+.dx-signin h1 { font-size: 20px; margin: 4px 0 14px; }
+.dx-signin form { display: flex; flex-direction: column; gap: 12px; }
+.dx-signin .dx-btn.p { padding: 10px; }

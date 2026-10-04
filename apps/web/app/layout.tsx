@@ -3,15 +3,13 @@ import type { ReactNode } from 'react';
 
 import './globals.css';
 
-import Sidebar from './components/Sidebar';
-import Navbar from './components/Navbar';
-
 export const metadata: Metadata = {
   title: 'Waypoint | Operations',
   description:
     'Delivery operations workspace',
 };
 
+/* Each role app renders its own shell: /dispatcher (app/dispatcher/layout.tsx) and /store. */
 export default function RootLayout({
   children,
 }: {
@@ -20,17 +18,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <div className="app-layout">
-          <Sidebar />
-
-          <div className="main-layout">
-            <Navbar />
-
-            <main className="page">
-              {children}
-            </main>
-          </div>
-        </div>
+        {children}
       </body>
     </html>
   );
