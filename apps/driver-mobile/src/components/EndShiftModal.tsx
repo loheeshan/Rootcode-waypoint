@@ -7,9 +7,11 @@ type Props = {
   onReviewSync: () => void;
   onEndShift: () => void;
   onCancel: () => void;
+  /** Changes for this account still waiting to sync (including proof photos). */
+  unsent?: number;
 };
 
-export function EndShiftModal({ visible, onReviewSync, onEndShift, onCancel }: Props) {
+export function EndShiftModal({ visible, onReviewSync, onEndShift, onCancel, unsent = 0 }: Props) {
   return (
     <Modal
       visible={visible}
@@ -36,8 +38,9 @@ export function EndShiftModal({ visible, onReviewSync, onEndShift, onCancel }: P
           </View>
 
           <Text style={styles.body}>
-            Check that every delivery and proof item has been sent before signing out.
-            Saved records stay on this phone.
+            {unsent
+              ? `${unsent} change${unsent === 1 ? ' is' : 's are'} not yet synced. They stay on this phone and are sent the next time you sign in with this account; other accounts cannot see or send them.`
+              : 'All your deliveries and proofs are synced.'}
           </Text>
 
           <Pressable

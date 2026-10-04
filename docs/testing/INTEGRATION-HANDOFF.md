@@ -13,8 +13,8 @@ Never record passwords, tokens or `.env` contents here.
 | 4 Dispatcher web | `feature/integration-dispatcher-web` | — | **Deferred**: frontend team still building Dispatcher web |
 | 5 Loader online | `feature/integration-loader-mobile` | `dev` `066dcad` | Done (`b865967`, merged #206) |
 | 6 Driver online | `feature/integration-driver-mobile` | `dev` `8113aa3` | Done (`5a0c6ce`, merged #207) |
-| 7 Loader offline | `feature/integration-loader-offline` | `dev` `865f0f8` | In review |
-| 8 Driver offline | `feature/integration-driver-offline` | Step 7 | Pending |
+| 7 Loader offline | `feature/integration-loader-offline` | `dev` `865f0f8` | Committed (`a9a0af8`), not pushed |
+| 8 Driver offline | `feature/integration-driver-offline` | Step 7 `a9a0af8` | In review (not tested) |
 | 9 Acceptance | `feature/integration-release-validation` | all | Pending (needs Step 4) |
 
 Without the Dispatcher UI, Steps 5–8 use the demo scenario below to optimize, assign the
@@ -332,6 +332,21 @@ Verification (Pixel 7 emulator, Expo Go SDK 57, disposable database):
 | Physical device / iOS | NOT RUN |
 | Partial batch / RETRY / 50-event batches / stale sequence | Covered by unit tests against real SQLite (not on device) |
 
+## Step 8: Driver offline persistence and sync
+
+Same design as Step 7 on the shared outbox; details in `apps/driver-mobile/src/sync/README.md`.
+Driver actions are saved on the phone first; proof photos upload (idempotent `pod_id`) before the
+queued delivery is sent; READY for start comes only from the server copy; per-account storage.
+
+| Check | Result |
+|---|---|
+| Driver typecheck (only pre-existing `TurnByTurnCard` errors), lint on changed files | PASS |
+| Emulator: offline start/arrive/proof/deliver/fail/complete -> relaunch -> reconnect, exactly once | NOT RUN (skipped at the user's request) |
+| Expired session, conflict, duplicate retry, account switch on Driver | NOT RUN |
+
+Manual check: follow the Step 7 table with `driver@waypoint.demo` and Expo Go SDK 56; confirm
+`proof_of_delivery` has one row per delivered stop and `sync_events` has one receipt per action.
+
 ## Next step
 
-Step 8 on `feature/integration-driver-offline` (Step 4 Dispatcher web stays deferred).
+Step 9 acceptance (needs Step 4 Dispatcher web).

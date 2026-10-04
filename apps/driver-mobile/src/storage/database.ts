@@ -1,21 +1,51 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
-/** Schema foundation only. Implement transactional cache + outbox writes with each workflow. */
+import { Outbox } from '@waypoint/mobile-sync';
+
+import { asSqlDatabase } from '../sync/sqlite';
+
+/**
+ * Local schema. Every row is scoped by the signed-in user's ID (and trip where relevant), so an
+ * account switch on a shared phone never shows or sends another person's work.
+ *
+ * v1 (foundation placeholder, never written to) is replaced by v2.
+ */
 export async function initializeDatabase(db: SQLiteDatabase): Promise<void> {
   await db.execAsync('PRAGMA journal_mode = WAL;');
   const row = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
-  if ((row?.user_version ?? 0) >= 1) return;
+  const version = row?.user_version ?? 0;
+  // The shared outbox schema is idempotent (CREATE ... IF NOT EXISTS), so it is applied every start.
+  await Outbox.migrate(asSqlDatabase(db));
+  if (version >= 2) return;
   await db.withTransactionAsync(async () => {
     await db.execAsync(`
-      CREATE TABLE IF NOT EXISTS cached_trips (id TEXT PRIMARY KEY, payload TEXT NOT NULL, updated_at TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS cached_stops (id TEXT PRIMARY KEY, trip_id TEXT NOT NULL, payload TEXT NOT NULL, updated_at TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS outbox_events (
-        event_id TEXT PRIMARY KEY, entity_id TEXT NOT NULL, event_type TEXT NOT NULL,
-        payload TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'PENDING'
-        CHECK(status IN ('PENDING','SYNCING','SYNCED','FAILED')),
-        attempts INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL
+      DROP TABLE IF EXISTS cached_trips;
+      DROP TABLE IF EXISTS cached_stops;
+      DROP TABLE IF EXISTS outbox_events;
+      DROP TABLE IF EXISTS sync_state;
+      CREATE TABLE IF NOT EXISTS driver_trip_lists (
+        user_id TEXT NOT NULL, delivery_date TEXT NOT NULL, payload TEXT NOT NULL, fetched_at TEXT NOT NULL,
+        PRIMARY KEY (user_id, delivery_date)
       );
-      CREATE TABLE IF NOT EXISTS sync_state (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-      PRAGMA user_version = 1;
+      CREATE TABLE IF NOT EXISTS driver_trip_views (
+        user_id TEXT NOT NULL, trip_id TEXT NOT NULL, payload TEXT NOT NULL, fetched_at TEXT NOT NULL,
+        PRIMARY KEY (user_id, trip_id)
+      );
+      CREATE TABLE IF NOT EXISTS driver_deliver_intents (
+        intent_id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        trip_id TEXT NOT NULL,
+        stop_id TEXT NOT NULL,
+        pod_id TEXT NOT NULL,
+        photo_uri TEXT NOT NULL,
+        receiver_name TEXT NOT NULL,
+        captured_at TEXT NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('pending', 'uploading', 'uploaded', 'queued', 'failed', 'done')),
+        detail TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS driver_deliver_intents_user ON driver_deliver_intents (user_id, trip_id, status);
     `);
+    await db.execAsync('PRAGMA user_version = 2;');
   });
 }

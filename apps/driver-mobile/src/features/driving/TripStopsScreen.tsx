@@ -11,7 +11,7 @@ const STOP_COLOR = { PLANNED: colors.textMuted, ARRIVED: colors.primary, DELIVER
 /** Selected trip: start (server READY -> IN_PROGRESS), ordered stops and completion. */
 export function TripStopsScreen() {
   const router = useRouter();
-  const { tripId, detail, loading, error, busy, refresh, start, complete } = useDriverTrip();
+  const { tripId, detail, serverStatus, loading, error, busy, refresh, start, complete, attention, discard, offline, fetchedAt } = useDriverTrip();
 
   if (!tripId) {
     return (
@@ -44,16 +44,26 @@ export function TripStopsScreen() {
   return (
     <DriverScreen title={`Trip ${trip.trip_number}`} subtitle={subtitle} refreshing={loading} onRefresh={refresh}>
       <Text style={text.muted}>
-        {TRIP_LABEL[trip.status]} · departs {colomboTime(trip.departure_at)} · returns {colomboTime(trip.return_at)}
+        {TRIP_LABEL[trip.status]}{detail.tripLocal ? ' (waiting to sync)' : ''} · departs {colomboTime(trip.departure_at)} · returns {colomboTime(trip.return_at)}
       </Text>
-      {error ? <Notice tone="red" title="Not saved">{error}</Notice> : null}
+      {offline ? (
+        <Notice tone="amber" title="Offline">Showing the copy saved {fetchedAt ? `at ${colomboTime(fetchedAt)}` : 'on this phone'}.</Notice>
+      ) : error ? <Notice tone="red" title="Not saved">{error}</Notice> : null}
+      {attention.map((e) => (
+        <Card key={e.event_id}>
+          <Text style={[text.label, { color: colors.dangerText }]}>Not applied: {e.type.replace('_', ' ').toLowerCase()}</Text>
+          <Text style={text.body}>{e.detail ?? e.outcome}</Text>
+          <Text style={text.muted}>Later actions for this trip wait. Discard to keep the server's version.</Text>
+          <Button variant="outline" label="Discard this change" onPress={() => void discard(e.event_id)} />
+        </Card>
+      ))}
 
       {trip.status === 'PLANNED' || trip.status === 'LOADING' ? (
         <Notice tone="amber" title="Waiting for loading">
           The trip can start once the loader marks the vehicle ready. Pull down to check again.
         </Notice>
       ) : null}
-      {trip.status === 'READY' ? (
+      {trip.status === 'READY' && serverStatus === 'READY' ? (
         <Button label="Start trip" loading={busy} onPress={() => void start()} />
       ) : null}
       {trip.status === 'IN_PROGRESS' && detail.started_at ? (
@@ -74,7 +84,7 @@ export function TripStopsScreen() {
           <Card selected={trip.status === 'IN_PROGRESS' && stop.stop_id === next?.stop_id}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>
               <Text style={[text.heading, { flex: 1 }]}>{stop.sequence_number}. {stop.outlet_brand}</Text>
-              <Text style={[text.label, { color: STOP_COLOR[stop.status], marginTop: 0 }]}>{STOP_LABEL[stop.status]}</Text>
+              <Text style={[text.label, { color: STOP_COLOR[stop.status], marginTop: 0 }]}>{STOP_LABEL[stop.status]}{stop.local ? ' · waiting to sync' : ''}</Text>
             </View>
             <Text style={text.muted}>
               {stop.outlet_district} · window {clock(stop.window_open_time)}–{clock(stop.window_close_time)}

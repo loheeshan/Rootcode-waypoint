@@ -25,7 +25,7 @@ export function ProofScreen() {
 function ProofForm({ stopId }: { stopId?: string }) {
   const router = useRouter();
   const { user } = useAuth();
-  const { tripId, detail, error, busy, loading, refresh, clearError, uploadPod, deliver } = useDriverTrip();
+  const { tripId, detail, error, busy, loading, refresh, clearError, confirmDelivery, deliverUploaded } = useDriverTrip();
   const stop = detail?.stops.find((s) => s.stop_id === stopId);
   const [draft, setDraft] = useState<PodDraft | null>(null);
   const [receiver, setReceiver] = useState('');
@@ -100,7 +100,11 @@ function ProofForm({ stopId }: { stopId?: string }) {
     setInvalid(null);
     const ready = saveDraft(draft, { ...draft, receiverName: name });
     setDraft(ready);
-    if (await uploadPod(ready)) setDraft(null);
+    // Saved on the phone with its photo; the proof uploads and the delivery is sent when online.
+    if (await confirmDelivery(ready)) {
+      setDraft(null);
+      router.navigate({ pathname: '/next-stop', params: { stopId: stop.stop_id } } as never);
+    }
   };
 
   const discard = () => {
@@ -109,7 +113,7 @@ function ProofForm({ stopId }: { stopId?: string }) {
   };
 
   const confirm = async () => {
-    if (serverPod && await deliver(stop.stop_id, serverPod.pod_id)) router.navigate({ pathname: '/next-stop', params: { stopId: stop.stop_id } } as never);
+    if (serverPod && await deliverUploaded(stop.stop_id, serverPod.pod_id)) router.navigate({ pathname: '/next-stop', params: { stopId: stop.stop_id } } as never);
   };
 
   const arrived = stop.status === 'ARRIVED' && detail.trip.status === 'IN_PROGRESS';
@@ -118,7 +122,7 @@ function ProofForm({ stopId }: { stopId?: string }) {
     <DriverScreen title={`Proof · stop ${stop.sequence_number}`} subtitle={stop.outlet_brand} refreshing={loading} onRefresh={refresh}>
       {error ? <Notice tone="red" title="Not saved">{error}</Notice> : null}
       {invalid ? <Notice tone="amber" title="Check the proof">{invalid}</Notice> : null}
-      {stop.status === 'DELIVERED' ? <Notice tone="green" title="Delivered">This stop is already confirmed by the server.</Notice> : null}
+      {stop.status === 'DELIVERED' ? <Notice tone="green" title={stop.local ? 'Delivered · waiting to sync' : 'Delivered'}>{stop.local ? 'Saved on this phone with its proof. The server confirms it once the photo and delivery are sent.' : 'This stop is confirmed by the server.'}</Notice> : null}
       {stop.status === 'FAILED' ? <Notice tone="red" title="Not delivered">This stop was recorded as not delivered.</Notice> : null}
       {stop.status === 'PLANNED' ? <Notice tone="amber" title="Arrive first">Mark arrival at this stop before recording proof.</Notice> : null}
 
@@ -151,7 +155,7 @@ function ProofForm({ stopId }: { stopId?: string }) {
             </Card>
           ) : null}
           <Button variant="outline" label={draft ? 'Retake photo' : 'Take photo'} loading={capturing} disabled={busy} onPress={() => void takePhoto()} />
-          <Button label="Upload proof" loading={busy} disabled={capturing} onPress={() => void upload()} />
+          <Button label="Confirm delivered" loading={busy} disabled={capturing} onPress={() => void upload()} />
           {draft ? <Button variant="outline" label="Discard photo" disabled={busy || capturing} onPress={discard} /> : null}
         </>
       ) : null}
