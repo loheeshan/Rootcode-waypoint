@@ -12,8 +12,8 @@ Monorepo boilerplate for the delivery operations application described in the su
 
 The backend includes identity, fleet, order and planning models with migrations
 `0001_user_roles`, `0002_fleet_foundation`, `0003_orders`, `0004_user_scopes` and
-`0005_planning_foundation`, `0006_plan_outcomes`, `0007_fleet_operations` and
-`0008_plan_optimizations`.
+`0005_planning_foundation`, `0006_plan_outcomes`, `0007_fleet_operations`,
+`0008_plan_optimizations` and `0009_plan_publications`.
 They create users, roles, user-role assignments, depots, outlets, vehicles,
 orders, user-outlet assignments, user-depot assignments, plans, plan revisions,
 trips, trip stops, plan assignments, deferral decisions, daily vehicle availability
@@ -50,10 +50,11 @@ times, outlet windows, depot turnaround and supplied weekly fuel balances. An
 explicitly synthetic JSON example is included. Dispatcher optimization now loads
 scoped database inputs, repairs infeasible groups with bounded insertion, independently
 validates the snapshot and atomically saves a draft revision. Request IDs protect
-retries; a result-detail API returns the original saved snapshot. Publishing and
-operational reservation checks remain pending; see the [planning guide](apps/api/app/planning/README.md)
+retries; a result-detail API returns the original saved snapshot. Publishing
+revalidates a saved draft against current inputs, assigns active depot Drivers,
+stores fuel reservations and moves orders to `PLANNED`/`DEFERRED`; see the [planning guide](apps/api/app/planning/README.md)
 and [remaining backend batches](docs/process/COMMIT-PLAN.md#backend-delivery-queue-2026-10-04).
-Remaining operational endpoints and domain tables, publishing, competition dataset imports, POD capture, offline
+Remaining operational endpoints and domain tables, republishing, competition dataset imports, POD capture, offline
 outbox processing and end-to-end workflows are **not implemented**. Public starter
 pages contain no real data. `scripts/seed.py --demo` delegates to the account seed;
 `scripts/validate-plan.py` remains a placeholder.
@@ -149,7 +150,7 @@ docker compose exec api alembic check
 
 This starts PostgreSQL, FastAPI and the web app. Mobile apps run separately. The Compose configuration is for local development; the web's API URL is compiled at build time. `docker compose down` preserves the named database volume. Migrations are explicit commands; the API does not create or alter tables at startup.
 
-Current migration: `0008_plan_optimizations (head)`. Apply migrations after
+Current migration: `0009_plan_publications (head)`. Apply migrations after
 rebuilding the API. Users start with no outlet/depot assignments until
 explicitly configured, including through the demo resource seed below.
 For API-only startup and the

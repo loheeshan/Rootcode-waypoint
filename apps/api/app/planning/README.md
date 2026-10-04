@@ -14,7 +14,8 @@ checks. A live compatibility preview checks individual orders against depot
 vehicles. `allocation.py` implements the capacity-only CP-SAT core; `routing.py`
 sequences fixed groups against imported travel, window and fuel inputs. The
 optimization API now loads scoped inputs, independently validates a draft and saves
-its revision/results atomically. Publishing remains pending.
+its revision/results atomically. The publish API revalidates one saved draft against
+current inputs, assigns drivers, reserves fuel and makes it the effective revision.
 
 ## Storage decisions
 
@@ -184,7 +185,7 @@ used. Candidate and excluded vehicle lists are disjoint and cover all returned
 vehicles for each order. These issues are **not persisted deferral reasons**.
 Zero candidates can mean missing inputs; it does not mark an order deferred.
 
-Pagination applies to orders only: default 20, range 1–100, nonnegative offset,
+Pagination applies to orders only: default 20, range 1â€“100, nonnegative offset,
 UUID ascending. `total` counts all eligible confirmed orders. The entire depot
 vehicle set is returned on every page, also sorted by UUID. A depot with more
 than 500 vehicles gets 422 rather than a truncated candidate set; the limit bounds
@@ -377,8 +378,8 @@ from the database. Request inputs contain only explicitly sourced travel legs,
 service duration and shifts. Current master capacities, temperature/access rules,
 outlet windows, day availability and recorded fuel totals come from the database.
 Missing availability or consumed-fuel history blocks the run. A future week has
-zero consumption to date; published vehicle work blocks optimization until the
-next reservation-accounting increment can provide an authoritative balance.
+zero consumption to date. Fuel reservations from published trips dated today or
+later in the plan week are added; published trips without a reservation block the run.
 
 `optimizer.py` first tries the capacity allocation and route schedule. If that
 does not serve all orders, it rebuilds groups using bounded insertion, trying
@@ -399,14 +400,48 @@ one transaction. Same-key/same-payload retries return the original saved result;
 different payloads under a used key return 409. PostgreSQL plan/depot/fleet locks
 serialize optimization and fleet input writes; the saved snapshot is historical,
 not a guarantee that no later order or master-data change exists. Live order states
-and fuel are unchanged. `publishable` remains false until publication revalidates
-against live work/reservations. Synthetic provenance remains visible in results.
+and fuel are unchanged. `publishable` stays false in the saved snapshot; only the
+publish API below revalidates against live work/reservations. Synthetic provenance remains visible in results.
 
 Run the HTTP tests in `tests/test_optimization_api.py` and independent engine tests
 in `tests/test_optimizer.py`. The PostgreSQL-specific concurrent replay/new-key
 tests skip under SQLite; verify them against a disposable PostgreSQL database.
 The new JSON/replay table is registered in `app/db/models.py`; migration `0008`
 adds no demo records or credentials and preserves existing planning rows.
+
+## Publishing, drivers and fuel reservations
+
+`POST /api/v1/plans/{plan_id}/revisions/{revision_id}/publish` publishes one saved
+optimization revision; `GET /api/v1/plans/{plan_id}/publication` returns the saved
+publication. See the [publication contract](../../../../docs/architecture/API-CONTRACTS.md#publishing-and-driver-assignment).
+
+`publication_service.py` locks the plan, depot, eligible orders/outlets, depot
+vehicles and assigned driver accounts in that order (the optimizer uses the same
+prefix). It rebuilds `RouteInputs` from **current** orders, outlet windows,
+capacities, availability, km/l, weekly quota, consumed fuel and reservations,
+reusing only the saved travel legs, service durations and shifts. The saved schedule
+is then passed to the same independent `validate_draft`. Any mismatch, including a
+new/changed order, returns 409 and asks for a new optimization; nothing is repaired.
+
+Publication also requires one active Driver, assigned to the plan depot, per trip;
+no driver may have overlapping trips. It compares against other effective published
+trips from the previous, same and next day (times come from their saved snapshots):
+no vehicle/driver overlap and at most two trips per vehicle departing on the plan
+date. Passed departures and past plan dates are rejected.
+
+On success one transaction marks the revision and plan `PUBLISHED`, sets trip
+drivers, writes one `FuelReservation` per trip, moves served orders to `PLANNED` and
+deferred orders to `DEFERRED`, and stores a `PlanPublication` replay record. A
+partial unique index allows one published revision per plan. Republishing or
+editing a published plan is not supported yet; it returns 409.
+
+Weekly fuel balance = current quota - consumed daily totals (Monday through today)
+- reservations for trips dated today or later. Earlier days rely on consumed totals,
+so reservations need no release step. Today's reservations can double count fuel
+already included in today's total; this is deliberately conservative.
+
+Tests: `tests/test_publication_api.py`. Its PostgreSQL concurrency test skips
+under SQLite; run it against a disposable PostgreSQL database.
 
 ## Apply the migration
 
@@ -419,14 +454,16 @@ docker compose exec api alembic current
 docker compose exec api alembic check
 ```
 
-Expected head: `0008_plan_optimizations`. It adds empty optimization snapshot/replay
-storage and preserves all 17 earlier application tables. Migration `0007` added daily availability/fuel
+Expected head: `0009_plan_publications`. It adds empty `plan_publications` and
+`fuel_reservations` tables, a one-published-revision partial index on
+`plan_revisions` and a `(id, vehicle_id)` trip index, preserving all 18 earlier
+application tables. `0008` added optimization snapshot/replay storage. Migration `0007` added daily availability/fuel
 tables and preserves all 15 earlier tables. See the
 [fleet input guide](../fleet/README.md#daily-operational-inputs) for their rules.
 Migration `0006` created two outcome tables and three supporting parent indexes;
 `0005` created the four planning foundation tables. None of these migrations
 inserts planning data, availability or fuel usage. Demo seeds keep their previous
-behavior. Daily inputs now feed optimization; publication remains pending.
+behavior. Daily inputs now feed optimization and publication.
 
 Local Python, from `apps/api`: `uv sync --frozen`, then `uv run alembic upgrade head`.
 Run `uv run ruff check .`, `uv run mypy app` and `uv run pytest -q` for backend checks.

@@ -156,11 +156,13 @@ optimization API loads scoped master/availability/consumed-fuel data, tries capa
 allocation, repairs groups with bounded insertion, independently validates the
 snapshot, and saves a new draft revision plus complete outcomes and input/result
 snapshots atomically. Request UUIDs make retries idempotent. PostgreSQL plan/depot
-and fleet locks protect revision numbering and fleet inputs. Published fleet work
-is rejected until reservation accounting is implemented. Standalone scheduler
+and fleet locks protect revision numbering and fleet inputs. Fuel reservations of
+published trips (today onward) are added to consumed totals. Standalone scheduler
 results keep `is_complete_plan_validation: false`; saved API results report
-`VALIDATED_SNAPSHOT` with `publishable: false`. Publication must reload current
-inputs and check operational work before allowing dispatch.
+`VALIDATED_SNAPSHOT` with `publishable: false`. The publish API reloads current
+inputs, reruns the independent validator, checks driver eligibility, vehicle/driver
+overlaps and the two-trip day limit, then atomically publishes one effective revision
+with driver assignments, fuel reservations and `PLANNED`/`DEFERRED` order statuses.
 
 ## Published plan rule
 

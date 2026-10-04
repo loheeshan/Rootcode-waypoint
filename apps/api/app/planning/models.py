@@ -17,6 +17,7 @@ from sqlalchemy import (
     UniqueConstraint,
     Uuid,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -86,6 +87,10 @@ class PlanRevision(Base):
             "(status = 'DRAFT' AND published_at IS NULL) OR "
             "(status = 'PUBLISHED' AND published_at IS NOT NULL)", name="publication_consistent",
         ),
+        # One effective published revision per plan; republication is not supported yet.
+        Index("uq_plan_revisions_one_published", "plan_id", unique=True,
+              postgresql_where=text("status = 'PUBLISHED'"),
+              sqlite_where=text("status = 'PUBLISHED'")),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
@@ -106,6 +111,7 @@ class Trip(Base):
     __tablename__ = "trips"
     __table_args__ = (
         Index("uq_trips_id_revision", "id", "plan_revision_id", unique=True),
+        Index("uq_trips_id_vehicle", "id", "vehicle_id", unique=True),
         UniqueConstraint("plan_revision_id", "vehicle_id", "trip_number",
                          name="uq_trips_revision_vehicle_number"),
         CheckConstraint("trip_number IN (1, 2)", name="trip_number_allowed"),

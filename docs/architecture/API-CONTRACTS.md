@@ -3,22 +3,24 @@
 ## Implementation status
 
 Authentication, Store order create/list/detail, Dispatcher order listing, fleet
-reads, daily fleet input GET/PUT, and plan create/list/detail routes are implemented. Store receipt,
-publishing, live operations, Loader and Driver routes remain planned.
+reads, daily fleet input GET/PUT, plan create/list/detail and plan publishing routes are
+implemented. Store receipt, live operations, Loader and Driver routes remain planned.
 A live, read-only plan compatibility preview is implemented for individual
 order/vehicle rules; it is not full feasibility validation or optimization.
 Internal capacity allocation and fixed-group route scheduling engines are also
 implemented, with validated JSON route input import and a synthetic example.
 The optimize API now orchestrates these engines with scoped database inputs,
 bounded repair/reallocation, independent snapshot validation and atomic saved draft
-results. New TypeScript DTOs are provided. Publishing remains a separate increment.
+results. Publishing revalidates a saved draft against current inputs, assigns drivers,
+reserves fuel and updates order statuses; see [publishing](#publishing-and-driver-assignment).
 Migration `0005_planning_foundation` adds storage for plans, revisions, trips and
-stops. Plan workspace and optimization APIs now use this storage; publishing remains pending.
+stops. Plan workspace, optimization and publishing APIs use this storage.
 Migration `0006_plan_outcomes` adds order result and deferral reason storage,
 without new routes or changes to existing order JSON/status behavior.
 Migration `0007_fleet_operations` adds daily availability and fuel-usage storage.
 Migration `0008_plan_optimizations` adds request replay keys and immutable-by-service
-input/result snapshots for each optimized revision.
+input/result snapshots for each optimized revision. Migration `0009_plan_publications`
+adds publication replay records, per-trip fuel reservations and a one-published-revision index.
 Separate daily-input routes now use this storage; the fleet list still returns
 only master data. Daily writes require conditional headers described below.
 The API also exposes `GET /health`,
@@ -656,9 +658,9 @@ cannot submit selected order IDs, capacities, windows, availability, quotas or f
 totals. Record plan-day availability for every depot vehicle first. For available
 vehicles, daily consumed-fuel records are required for every day from Monday through
 today within the plan week, including explicit zeros. A wholly future week has
-zero consumption to date. Future reservations are not assumed zero when published
-work exists: this version rejects that case with 409 until publication/reservation
-accounting is implemented. Shifts cannot start before the request's server clock.
+zero consumption to date. Fuel reservations of published trips dated today or later
+in that week are added to consumption; a published trip without a reservation (data
+created outside the publish API) is rejected with 409. Shifts cannot start before the request's server clock.
 Unknown data produces 422, not invented deferrals. Past plans and new runs on
 published plans are rejected; earlier successful retries still replay.
 
@@ -728,6 +730,80 @@ const saved = await api.requestWithMetadata<OptimizationResponse>(
 // Display saved.data.trips and saved.data.deferrals, including synthetic provenance.
 ```
 
+## Publishing and driver assignment
+
+```text
+POST /api/v1/plans/{plan_id}/revisions/{revision_id}/publish
+GET  /api/v1/plans/{plan_id}/publication
+```
+
+Both require active Dispatcher authentication and current plan depot access; other
+plans return 404. The revision must belong to the plan and have a saved optimization
+result (otherwise 404). The POST accepts only:
+
+```json
+{
+  "request_id": "<new UUID; preserve for retries>",
+  "driver_assignments": [{"trip_id": "<saved trip UUID>", "driver_id": "<user UUID>"}]
+}
+```
+
+Every saved trip needs exactly one entry (at most 40); a revision with no trips uses
+`[]`. Each driver must be an active `DRIVER` assigned to the plan depot through
+`user_depots`. A driver may take several trips that do not overlap in time.
+
+The server never trusts the saved optimization as current. It locks the plan, depot,
+eligible orders/outlets, depot vehicles and drivers, then rebuilds inputs from
+**current** confirmed orders, outlet windows, vehicle capacities/types, plan-day
+availability, km/l, weekly quota, consumed fuel (Monday through today, rows required)
+and reservations. Only the saved travel legs, service durations and shifts are reused.
+The saved schedule must pass the independent validator against those inputs, covering
+every currently confirmed order exactly once. It also checks other effective
+published trips from the previous, same and next day: no vehicle or driver overlap and
+at most two trips per vehicle departing on the plan date. Any departure before the
+server time, or a past plan date, is rejected.
+
+Success commits in one transaction: revision and plan become `PUBLISHED` with
+`published_at`; trips receive drivers; one fuel reservation per trip is stored; served
+orders become `PLANNED` and deferred orders `DEFERRED`. Trip status stays `PLANNED`.
+The saved optimization result is not changed (its `publishable: false` describes the
+draft snapshot). Response (`201`, or `200` for a replay):
+
+```typescript
+interface PublicationResponse {
+  request_id: string; plan_id: string; revision_id: string; revision_number: number;
+  published_at: string; published_by: string;
+  validation: 'REVALIDATED_AT_PUBLISH';
+  served_order_count: number; deferred_order_count: number;
+  trips: { trip_id: string; vehicle_id: string; trip_number: number; driver_id: string;
+           departure_at: string; return_at: string; fuel_l: string }[];
+  fuel_balances: { vehicle_id: string; week_start: string; weekly_quota_l: string;
+                   consumed_l: string; reserved_l: string; remaining_l: string }[];
+}
+```
+
+`fuel_balances` covers vehicles used by the revision at publication time; `reserved_l`
+includes this revision. Balance = quota - consumed - reservations for trips dated today
+or later. Earlier days use consumed totals, so reservations are never released; today's
+reservations can double count fuel already in today's total (conservative).
+`GET .../publication` returns the saved response, or 404 when unpublished.
+
+| Status | Meaning |
+|---|---|
+| 201 / 200 | Published / same key and payload replayed. |
+| 401 / 403 | Missing or inactive authentication / missing Dispatcher role. |
+| 404 | Inaccessible plan, or revision without an optimization result in this plan. |
+| 409 | Plan already published, key reused differently, inputs changed since optimization (`run a new optimization`), departure passed, vehicle/driver overlap, third trip, or published work without a reservation/snapshot. |
+| 422 | Invalid body, missing/extra trip assignments, ineligible driver, a driver's own trips overlapping, past plan date, or missing consumed-fuel rows. |
+| 503 | Database unavailable; retry with the same request ID. |
+
+One published revision per plan is enforced by a partial unique index. Republishing,
+superseding or editing a published plan is not implemented. Loader, Driver and Store
+reads of published trips arrive in later increments. All responses use
+`Cache-Control: no-store`; POST success sets `Location` to the GET endpoint.
+Shared exports: `PublishRequest`, `PublicationResponse`, `PublishedTripResponse`,
+`FuelBalanceResponse`.
+
 ## Loader
 
 ```text
@@ -793,8 +869,8 @@ package. `SERVED` means assigned to a stop in a revision, not delivered. Reason
 codes are `NO_COMPATIBLE_VEHICLE`, `REEFER_CAPACITY_EXHAUSTED`,
 `VAN_CAPACITY_EXHAUSTED`, `WEIGHT_CAPACITY`, `VOLUME_CAPACITY`, `TIME_WINDOW`,
 `FUEL_QUOTA`, `VEHICLE_UNAVAILABLE`, `TRIP_LIMIT`. These are storage contracts;
-draft optimization now writes complete outcomes and reasons; publication validation
-against current operational work remains pending.
+draft optimization writes complete outcomes and reasons; publication revalidates them
+against current inputs and moves orders to `PLANNED`/`DEFERRED`.
 
 Sync:
 ```text
