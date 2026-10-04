@@ -1,1 +1,1 @@
-export { VehicleDetailsScreen as default } from '../../src/features/flows/screens';
+export { default } from '../../src/features/vehicle/VehicleDetailsScreen';
