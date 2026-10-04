@@ -93,6 +93,18 @@ Rootcode/
 └── docker-compose.yml
 ```
 
+## Run the demo
+
+```bash
+docker compose up
+```
+
+No `.env` is needed. This builds and starts PostgreSQL, the API, the web app (Store and Dispatcher)
+and Metro for both mobile apps. Demo accounts and today's operations are seeded automatically.
+Sign-in details, URLs, mobile setup and a guided check: **[DEMO-CREDENTIALS.md](DEMO-CREDENTIALS.md)**.
+Reset with `docker compose down -v`, which removes the demo volumes only.
+For development, copy `.env.example` to `.env`: that sets `APP_ENV=development` and switches the demo off.
+
 ## Prerequisites
 
 - Node.js 22 LTS (22.13 or newer) and **pnpm 10.34.6**.

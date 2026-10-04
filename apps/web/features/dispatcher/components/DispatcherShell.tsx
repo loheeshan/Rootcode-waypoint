@@ -1,7 +1,7 @@
 "use client";
 import { createContext, useCallback, useContext, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { SignInError, signInMessages, type AuthUser, type DepotResponse } from "@waypoint/api-contracts";
-import { currentSession, DEMO_EMAILS, webSignIn, webSignOut } from "../../../lib/auth-client";
+import { currentSession, DEMO_EMAILS, loadDemoAccount, webSignIn, webSignOut } from "../../../lib/auth-client";
 import Sidebar from "../../../app/components/Sidebar";
 import Navbar from "../../../app/components/Navbar";
 import { colomboToday, getFleet } from "../data/dispatcher";
@@ -94,6 +94,9 @@ function SignIn({ expired, notice, onSignedIn }: { expired: boolean; notice: str
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const demo = DEMO_EMAILS.DISPATCHER;
+  // Demo stack only: the server returns the demo account; sign-in still goes through the API.
+  const [demoAccount, setDemoAccount] = useState<{ email: string; password: string } | null>(null);
+  useEffect(() => { loadDemoAccount("DISPATCHER").then(setDemoAccount); }, []);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -122,11 +125,18 @@ function SignIn({ expired, notice, onSignedIn }: { expired: boolean; notice: str
         {expired && <Alert k="w" t="Sign in again to continue." />}
         {notice && <Alert k="w" t={notice} />}
         {error && <Alert k="e" t={error} />}
+        {demoAccount && (
+          <Alert t="Demo account">
+            <div>Email: <code>{demoAccount.email}</code></div>
+            <div>Password: <code>{demoAccount.password}</code></div>
+            <button type="button" className="dx-btn" style={{ marginTop: 8 }} onClick={() => { setEmail(demoAccount.email); setPassword(demoAccount.password); }}>Use demo account</button>
+          </Alert>
+        )}
         <label className="dx-field">Work email<input type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} /></label>
         <label className="dx-field">Password<input type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} /></label>
         <label className="dx-muted"><input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} /> Keep me signed in</label>
         <button className="dx-btn p" type="submit" disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button>
-        {demo && <p className="dx-muted">Demo: <a href="#" onClick={(e) => { e.preventDefault(); setEmail(demo); }}>use {demo}</a> with the password set when the demo accounts were seeded.</p>}
+        {demo && !demoAccount && <p className="dx-muted">Demo: <a href="#" onClick={(e) => { e.preventDefault(); setEmail(demo); }}>use {demo}</a> with the password set when the demo accounts were seeded.</p>}
       </form>
     </div>
   );

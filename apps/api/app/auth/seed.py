@@ -36,8 +36,9 @@ class SeedResult:
 
 
 def ensure_demo_environment(app_env: str) -> None:
-    if app_env not in {"development", "test"}:
-        raise DemoSeedError("Demo seeding requires APP_ENV=development or test.")
+    # "demo" is set only by docker-compose.yml for the one-command reviewer demo.
+    if app_env not in {"development", "test", "demo"}:
+        raise DemoSeedError("Demo seeding requires APP_ENV=development, test or demo.")
 
 
 def _check_password(password: str) -> None:

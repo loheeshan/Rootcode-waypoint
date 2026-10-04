@@ -1,9 +1,9 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { SignInError, signInMessages, type AuthUser } from "@waypoint/api-contracts";
 import { Alert } from "./ui";
-import { DEMO_EMAILS, webSignIn } from "@/lib/auth-client";
+import { DEMO_EMAILS, loadDemoAccount, webSignIn } from "@/lib/auth-client";
 
 export default function Auth({ expired, onSignedIn, notice }: {
   expired: boolean; onSignedIn: (user: AuthUser) => void; notice?: string | null;
@@ -15,6 +15,9 @@ export default function Auth({ expired, onSignedIn, notice }: {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const demo = DEMO_EMAILS.STORE_MANAGER;
+  // Demo stack only: the server returns the demo account; sign-in still goes through the API.
+  const [demoAccount, setDemoAccount] = useState<{ email: string; password: string } | null>(null);
+  useEffect(() => { loadDemoAccount("STORE_MANAGER").then(setDemoAccount); }, []);
 
   const signIn = async (e: FormEvent) => {
     e.preventDefault();
@@ -40,11 +43,18 @@ export default function Auth({ expired, onSignedIn, notice }: {
         {expired && <p className="m">Sign in again to continue.</p>}
         {notice && <Alert k="w" t={notice} />}
         {error && <Alert k="e" t={error} />}
+        {demoAccount && (
+          <Alert k="i" t="Demo account">
+            <div>Email: <code>{demoAccount.email}</code></div>
+            <div>Password: <code>{demoAccount.password}</code></div>
+            <button type="button" style={{ marginTop: 8 }} onClick={() => { setEm(demoAccount.email); setPw(demoAccount.password); }}>Use demo account</button>
+          </Alert>
+        )}
         <label>Work email<input type="email" autoComplete="username" required value={em} onChange={(e) => setEm(e.target.value)} /></label><br /><br />
         <label>Password<input type="password" autoComplete="current-password" required value={pw} onChange={(e) => setPw(e.target.value)} /></label>
         <p><label><input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} /> Keep me signed in</label></p>
         <button className="p" style={{ width: "100%" }} type="submit" disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button>
-        {demo && <p className="m">Demo: <a href="#" onClick={(e) => { e.preventDefault(); setEm(demo); }}>use {demo}</a> with the password set when the demo accounts were seeded.</p>}
+        {demo && !demoAccount && <p className="m">Demo: <a href="#" onClick={(e) => { e.preventDefault(); setEm(demo); }}>use {demo}</a> with the password set when the demo accounts were seeded.</p>}
         <p><a href="#" onClick={(e) => { e.preventDefault(); setV("reset"); }}>Forgot password</a></p>
       </form>)}
       {v === "reset" && (<>

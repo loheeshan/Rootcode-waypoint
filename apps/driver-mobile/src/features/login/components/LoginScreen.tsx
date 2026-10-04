@@ -23,6 +23,8 @@ type Props = {
   onForgotPassword?: () => void;
   /** Development-only demo account email offered as a one-tap fill. */
   demoEmail?: string | null;
+  /** Docker demo stack only: shown as a card; "Use demo account" fills both fields. */
+  demoAccount?: { email: string; password: string } | null;
   loading?: boolean;
   error?: string | null;
 };
@@ -33,6 +35,7 @@ export function LoginScreen({
   onNfc,
   onForgotPassword,
   demoEmail = null,
+  demoAccount = null,
   loading = false,
   error = null,
 }: Props) {
@@ -140,7 +143,20 @@ export function LoginScreen({
             {!loading ? <Ionicons name="arrow-forward" size={18} color="#fff" /> : null}
           </Pressable>
 
-          {demoEmail ? (
+          {demoAccount ? (
+            <View style={styles.demoCard}>
+              <Text style={styles.deadTitle}>Demo account</Text>
+              <Text style={styles.deadSub}>Email: {demoAccount.email}</Text>
+              <Text style={styles.deadSub}>Password: {demoAccount.password}</Text>
+              <Pressable
+                style={styles.bio}
+                onPress={() => { setEmail(demoAccount.email); setPassword(demoAccount.password); }}
+                accessibilityRole="button"
+              >
+                <Text style={styles.bioText}>Use demo account</Text>
+              </Pressable>
+            </View>
+          ) : demoEmail ? (
             <Pressable
               onPress={() => setEmail(demoEmail)}
               hitSlop={8}
@@ -258,6 +274,14 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   bioText: { fontSize: 13, fontWeight: "700", color: L.text },
+  demoCard: {
+    marginTop: 16,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: L.infoBg,
+    borderWidth: 1,
+    borderColor: L.border,
+  },
   dead: {
     marginTop: 16,
     flexDirection: "row",
