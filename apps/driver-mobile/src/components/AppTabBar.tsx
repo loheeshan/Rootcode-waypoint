@@ -55,6 +55,7 @@ export function AppTabBar({ state, navigation }: TabBarProps) {
           (route.name === "sync" && SYNC_CHILDREN.includes(activeName));
           (route.name === "today" && TODAY_CHILDREN.includes(activeName));
           (route.name === "profile" && PROFILE_CHILDREN.includes(activeName));
+          (route.name === "today" && TODAY_CHILDREN.includes(activeName));
         const onPress = () => {
           const event = navigation.emit({
             type: "tabPress",
