@@ -6,15 +6,14 @@ This is the current implementation queue; the original feature lists below also
 include completed work and frontend tasks. Use one reviewable commit per batch,
 with `feature/` branches. The user commits and pushes after reviewing each batch.
 
-**Completed:** draft optimization (`feature/planning-optimize-api`).
+**Completed:** draft optimization (`feature/planning-optimize-api`) and batch 1
+publishing (`feature/planning-publish`).
 
-**Current batch (1):** `feature/planning-publish` — publish one effective revision
-after revalidating current inputs; active depot Driver assignments; per-trip fuel
-reservations used by optimization and publishing; vehicle/driver overlap and
-two-trip day checks; `PLANNED`/`DEFERRED` order transitions; replay keys and
-migration `0009_plan_publications`. Republishing a published plan is not included.
+**Current batch (2):** `feature/loader-workflow` — depot-scoped Loader trip list and
+loading view, append-only per-order loaded/missing/damaged events with stable IDs,
+guarded `PLANNED -> LOADING -> READY` transitions and migration `0010_load_events`.
 
-**Six backend batches remain after this commit (2–7):**
+**Five backend batches remain after this commit (3–7):**
 
 | Next | Suggested branch | Commit scope / completion check |
 |---|---|---|
