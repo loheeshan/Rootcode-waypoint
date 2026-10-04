@@ -52,9 +52,13 @@ const client = createApiClient('/api/backend');
 /** API calls through the same-origin proxy; the header marks writes as coming from this app. */
 export const backend = {
   request<T>(path: string, init: RequestInit = {}): Promise<T> {
+    return backend.requestWithMetadata<T>(path, init).then((response) => response.data);
+  },
+  /** Same as `request`, also returning status, ETag and Location (fleet inputs, replays). */
+  requestWithMetadata<T>(path: string, init: RequestInit = {}) {
     const headers = new Headers(init.headers);
     headers.set('X-Waypoint-Client', 'web');
-    return client.request<T>(path, { ...init, headers, credentials: 'same-origin' });
+    return client.requestWithMetadata<T>(path, { ...init, headers, credentials: 'same-origin' });
   },
 };
 

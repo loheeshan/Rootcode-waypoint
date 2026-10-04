@@ -1,246 +1,142 @@
+'use client';
+
+import Link from 'next/link';
+import { useDispatcher } from '../../features/dispatcher/components/DispatcherShell';
+import { LoadError, Loading, TripBadge, useLoad } from '../../features/dispatcher/components/ui';
+import {
+  EXCEPTION_KINDS, EXCEPTION_LABEL, ORDER_STATUSES, ORDER_STATUS_LABEL, TRIP_STATUSES, formatDate, formatTime,
+  getLive, listOperationTrips, listOrders, shortId,
+} from '../../features/dispatcher/data/dispatcher';
+
+/** Day overview from the operations API; counts only, no derived KPIs the API does not return. */
 export default function DispatcherDashboard() {
+  const { depotId, day, onExpired } = useDispatcher();
+  const key = `${depotId}:${day}`;
+  const live = useLoad(() => getLive({ depot_id: depotId, delivery_date: day }), onExpired, key);
+  const toPlan = useLoad(() => listOrders({ depot_id: depotId, requested_delivery_date: day, status: 'CONFIRMED', limit: 1 }), onExpired, key);
+  const trips = useLoad(() => listOperationTrips({ depot_id: depotId, delivery_date: day, limit: 5 }), onExpired, key);
+
+  const s = live.data;
+  const tripTotal = s ? TRIP_STATUSES.reduce((n, t) => n + s.trips_by_status[t], 0) : 0;
+  const orderTotal = s ? ORDER_STATUSES.reduce((n, t) => n + s.orders_by_status[t], 0) : 0;
+  const failures = s ? s.exceptions.LOAD_MISSING + s.exceptions.LOAD_DAMAGED + s.exceptions.DELIVERY_FAILED + s.exceptions.SYNC_CONFLICT : 0;
+
   return (
     <>
       <div className="page-header">
         <div>
-          <p className="eyebrow">
-            OPERATIONS
-          </p>
-
+          <p className="eyebrow">OPERATIONS</p>
           <h1>Dashboard</h1>
-
-          <p>
-            Monitor today's delivery operation,
-            fleet capacity, and exceptions.
-          </p>
+          <p>{formatDate(day)} · published plans, loading, deliveries and exceptions from the server.</p>
         </div>
       </div>
 
-      {/* Statistics */}
-
-      <div className="stats">
-        <div className="stat-card">
-          <span>ORDERS</span>
-          <strong>42</strong>
-          <small>12 to plan</small>
-        </div>
-
-        <div className="stat-card">
-          <span>ACTIVE TRIPS</span>
-          <strong>
-            18 <small>/ 22</small>
-          </strong>
-          <small>82% deployed</small>
-        </div>
-
-        <div className="stat-card">
-          <span>DELIVERIES</span>
-          <strong>
-            31 <small>/ 38</small>
-          </strong>
-          <small>
-            82% complete
-          </small>
-        </div>
-
-        <div className="stat-card warning">
-          <span>ON-TIME SLA</span>
-          <strong>86%</strong>
-          <small>Target 90%</small>
-        </div>
-
-        <div className="stat-card danger">
-          <span>EXCEPTIONS</span>
-          <strong>4</strong>
-          <small>2 critical</small>
-        </div>
-      </div>
-
-      {/* Main dashboard */}
-
-      <div className="dashboard-grid">
-
-        <section className="card">
-          <h2>Delivery Progress</h2>
-
-          <div className="progress">
-            <strong>82%</strong>
-            <span>COMPLETED</span>
-          </div>
-
-          <div className="metrics">
-            <div>
-              <strong>31</strong>
-              <span>Delivered</span>
+      {live.loading ? <Loading t="Loading today's operation…" /> : live.error ? <LoadError error={live.error} retry={live.reload} /> : s && (
+        <>
+          <div className="stats">
+            <div className="stat-card">
+              <span>TO PLAN</span>
+              <strong>{toPlan.data?.total ?? '…'}</strong>
+              <small>Confirmed orders not yet published</small>
             </div>
-
-            <div>
-              <strong>4</strong>
-              <span>In Transit</span>
+            <div className="stat-card">
+              <span>IN PUBLISHED PLANS</span>
+              <strong>{orderTotal}</strong>
+              <small>{s.deferred_orders} deferred</small>
             </div>
-
-            <div>
-              <strong>5</strong>
-              <span>Delayed</span>
+            <div className="stat-card">
+              <span>TRIPS</span>
+              <strong>{s.trips_by_status.IN_PROGRESS} <small>/ {tripTotal}</small></strong>
+              <small>In progress / published</small>
             </div>
-
-            <div>
-              <strong>2</strong>
-              <span>Blocked</span>
+            <div className="stat-card">
+              <span>DELIVERED STOPS</span>
+              <strong>{s.delivery.delivered_stops} <small>/ {s.delivery.stops_requiring_visit}</small></strong>
+              <small>{s.delivery.failed_stops} failed</small>
+            </div>
+            <div className={`stat-card ${failures ? 'danger' : ''}`}>
+              <span>EXCEPTIONS</span>
+              <strong>{failures}</strong>
+              <small>{s.exceptions.RECEIPT_PENDING} receipts pending</small>
             </div>
           </div>
-        </section>
 
-        <section className="card">
-          <h2>Fleet Capacity</h2>
+          <div className="dashboard-grid">
+            <section className="card">
+              <h2>Delivery Progress</h2>
+              <div className="metrics">
+                <div><strong>{s.delivery.delivered_stops}</strong><span>Delivered stops</span></div>
+                <div><strong>{s.delivery.open_stops}</strong><span>Open stops</span></div>
+                <div><strong>{s.delivery.failed_stops}</strong><span>Failed stops</span></div>
+                <div><strong>{s.delivery.receipts_confirmed}</strong><span>Receipts confirmed</span></div>
+              </div>
+            </section>
 
-          <div className="capacity">
-            <p>
-              Refrigerated
-              <strong>82%</strong>
-            </p>
-
-            <div>
-              <span style={{ width: '82%' }} />
-            </div>
-
-            <p>
-              Dry / Heavy
-              <strong>74%</strong>
-            </p>
-
-            <div>
-              <span style={{ width: '74%' }} />
-            </div>
-
-            <p>
-              Light Vans
-              <strong>52%</strong>
-            </p>
-
-            <div>
-              <span style={{ width: '52%' }} />
-            </div>
+            <section className="card">
+              <h2>Loading Progress</h2>
+              <div className="metrics">
+                <div><strong>{s.loading.loaded}</strong><span>Loaded</span></div>
+                <div><strong>{s.loading.pending}</strong><span>Pending</span></div>
+                <div><strong>{s.loading.missing}</strong><span>Missing</span></div>
+                <div><strong>{s.loading.damaged}</strong><span>Damaged</span></div>
+              </div>
+            </section>
           </div>
-        </section>
 
-      </div>
+          <section className="card">
+            <div className="card-header">
+              <h2>Needs Attention</h2>
+              <Link href="/dispatcher/trips">View all exceptions →</Link>
+            </div>
+            <div className="attention">
+              {EXCEPTION_KINDS.map((kind) => (
+                <div key={kind}>
+                  <span>{EXCEPTION_LABEL[kind].toUpperCase()}</span>
+                  <strong>{s.exceptions[kind]}</strong>
+                </div>
+              ))}
+            </div>
+          </section>
 
-      {/* Attention */}
+          <div className="dashboard-grid">
+            <section className="card">
+              <h2>Orders in Published Plans</h2>
+              <div className="ready">
+                <div>
+                  <strong>{toPlan.data?.total ?? '…'} CONFIRMED, WAITING FOR A PUBLISHED PLAN</strong>
+                  <p>{s.published_plans} published plan(s) · {s.draft_plans} draft plan(s) for this date</p>
+                </div>
+                <Link href="/dispatcher/planning">Open Planning →</Link>
+              </div>
+              <div className="order-status">
+                {ORDER_STATUSES.filter((st) => st !== 'CONFIRMED').map((st) => (
+                  <span key={st}>{ORDER_STATUS_LABEL[st]} ({s.orders_by_status[st]})</span>
+                ))}
+              </div>
+            </section>
+
+            <section className="card">
+              <h2>Trips by Status</h2>
+              <div className="order-status">
+                {TRIP_STATUSES.map((st) => <span key={st}><TripBadge status={st} /> {s.trips_by_status[st]}</span>)}
+              </div>
+            </section>
+          </div>
+        </>
+      )}
 
       <section className="card">
         <div className="card-header">
-          <h2>
-            Needs Immediate Attention
-          </h2>
-
-          <button>
-            View all exceptions →
-          </button>
+          <h2>Trips</h2>
+          <Link href="/dispatcher/trips">View all trips →</Link>
         </div>
-
-        <div className="attention">
-          <div>
-            <span>DELAYED</span>
-            <strong>5</strong>
-            <small>+2h avg delay</small>
-          </div>
-
-          <div>
-            <span>OFFLINE</span>
-            <strong>3</strong>
-            <small>GPS signal lost</small>
-          </div>
-
-          <div>
-            <span>LOADING ISSUES</span>
-            <strong>2</strong>
-            <small>Bay 3 dock hold</small>
-          </div>
-        </div>
-      </section>
-
-      {/* Orders */}
-
-      <div className="dashboard-grid">
-
-        <section className="card">
-          <h2>Today's Orders</h2>
-
-          <div className="ready">
-            <div>
-              <strong>
-                12 READY TO PLAN
-              </strong>
-
-              <p>
-                Orders verified and awaiting
-                vehicle assignment
-              </p>
-            </div>
-
-            <a href="/dispatcher/planning">
-              Open Planning →
-            </a>
-          </div>
-
-          <div className="order-status">
-            <span>Confirmed (14)</span>
-            <span>Ready (8)</span>
-            <span>Planned (12)</span>
-            <span>Deferred (4)</span>
-            <span>Issue (4)</span>
-          </div>
-        </section>
-
-        <section className="card">
-          <h2>Fleet Distribution</h2>
-
-          <div className="fake-map">
-            <span>1</span>
-            <span>2</span>
-            <span>3</span>
-            <span>4</span>
-          </div>
-        </section>
-
-      </div>
-
-      {/* Active Trips */}
-
-      <section className="card">
-        <div className="card-header">
-          <h2>Active Trips</h2>
-
-          <button>
-            View all trips →
-          </button>
-        </div>
-
-        {[
-          ['WP-1042', 'Colombo → Kandy', '75%'],
-          ['WP-1187', 'Colombo → Galle', '52%'],
-          ['WP-0921', 'Kandy → Jaffna', '45%'],
-          ['WP-0765', 'Colombo → Trinco', '40%'],
-          ['WP-0419', 'Colombo → Negombo', '15%'],
-        ].map((trip) => (
-          <div
-            className="trip"
-            key={trip[0]}
-          >
-            <strong>{trip[0]}</strong>
-
-            <span>{trip[1]}</span>
-
-            <div className="trip-bar">
-              <span
-                style={{
-                  width: trip[2],
-                }}
-              />
-            </div>
-
-            <strong>{trip[2]}</strong>
+        {trips.loading ? <Loading /> : trips.error ? <LoadError error={trips.error} retry={trips.reload} /> : !trips.data?.items.length ? (
+          <p className="dx-muted">No published trips for this date.</p>
+        ) : trips.data.items.map(({ trip, delivery }) => (
+          <div className="trip" key={trip.trip_id}>
+            <strong title={trip.trip_id}>{shortId(trip.vehicle_id)} · Trip {trip.trip_number}</strong>
+            <span>{formatTime(trip.departure_at)}–{formatTime(trip.return_at)} <TripBadge status={trip.status} /></span>
+            <strong>{delivery.delivered_stops + delivery.failed_stops}/{delivery.stops_requiring_visit} stops</strong>
           </div>
         ))}
       </section>

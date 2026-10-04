@@ -10,15 +10,16 @@ Never record passwords, tokens or `.env` contents here.
 | 1 Demo foundation | `feature/integration-demo-foundation` | `dev` `be6967e` (all backend batches incl. #201) | Done (`aa3add7`, merged #202) |
 | 2 Auth (Store, Loader, Driver) | `feature/integration-demo-auth` | `dev` `68db449` | Done (`978bb94`) |
 | 3 Store web | `feature/integration-store-web` | Step 2 `978bb94` | Done (`e6b42be`, merged #205) |
-| 4 Dispatcher web | `feature/integration-dispatcher-web` | — | **Deferred**: frontend team still building Dispatcher web |
+| 4 Dispatcher web | `feature/integration-dispatcher-web` | `dev` `865f0f8` | Done (`291c0f9`, merged #208) |
 | 5 Loader online | `feature/integration-loader-mobile` | `dev` `066dcad` | Done (`b865967`, merged #206) |
 | 6 Driver online | `feature/integration-driver-mobile` | `dev` `8113aa3` | Done (`5a0c6ce`, merged #207) |
-| 7 Loader offline | `feature/integration-loader-offline` | `dev` `865f0f8` | Committed (`a9a0af8`), not pushed |
-| 8 Driver offline | `feature/integration-driver-offline` | Step 7 `a9a0af8` | In review (not tested) |
-| 9 Acceptance | `feature/integration-release-validation` | all | Pending (needs Step 4) |
+| 7 Loader offline | `feature/integration-loader-offline` | `dev` `865f0f8` | Done (`a9a0af8`, merged #209) |
+| 8 Driver offline | `feature/integration-driver-offline` | Step 7 `a9a0af8` | In review (not device-tested) |
+| 9 Acceptance | `feature/integration-release-validation` | all | Pending (needs Step 8) |
 
-Without the Dispatcher UI, Steps 5–8 use the demo scenario below to optimize, assign the
-Driver and publish through the real services. That replaces the Dispatcher clicks only.
+Steps 5–6 were verified with the demo scenario below (optimize, assign the Driver, publish through
+the real services) because the Dispatcher UI was not connected yet. From Step 4 on, the Dispatcher
+web app does the same through the API; the scenario remains a shortcut for fixtures.
 
 ## Step 1 baseline (2026-10-04, Windows, Node 22.20.0, pnpm 10.34.6, Python 3.12)
 
@@ -98,7 +99,7 @@ For a phone, also allow inbound TCP 8000 on the PC firewall and keep both on one
 - Real login is `POST /api/v1/auth/login` (email/password) + `GET /api/v1/me`; there is no
   refresh token. Driver badge/PIN and Loader shift-PIN screens are UI mocks to replace.
 - Loading and delivery are per order (weight/volume/temperature); there are no SKU/carton counts.
-- Dispatcher web connection (Step 4) is deferred at the user's request.
+- Dispatcher web (Step 4) uses the same session cookie and proxy as the Store web app.
 
 ## Step 2: real login (Store web, Loader and Driver mobile)
 
@@ -132,7 +133,7 @@ For a phone, also allow inbound TCP 8000 on the PC firewall and keep both on one
   biometric and reset-PIN screens remain in both apps but are no longer linked from sign-in.
 - The Store mock "Expire session" demo control was removed: it changed UI state only while
   the real cookie stayed valid.
-- Dispatcher login is not connected (deferred with Step 4).
+- Dispatcher login is connected in Step 4.
 
 Verification (production web build on a disposable database with a generated test password):
 
@@ -165,7 +166,7 @@ Expo Go on the emulator. Manual check with your API running and demo data seeded
 4. Repeat with `corepack pnpm dev:loader` and `loader@waypoint.demo` (Welcome -> Start shift).
 
 Known: the frontend team's Dispatcher sidebar/header now also renders around `/store`
-(from `dev`); not changed here.
+(from `dev`); not changed here. Fixed in Step 4 (the shell moved to `app/dispatcher/layout.tsx`).
 
 ## Step 3: Store web connected to the API
 
@@ -201,6 +202,121 @@ the `operations` scenario with a next-morning test clock):
 | `pnpm test` | PASS 25/25 (4 Store data tests, 1 client error-detail test) |
 | Web typecheck / lint | PASS |
 | Automated browser E2E | NOT ADDED: no E2E runner in the repo (Playwright would need a browser download) |
+
+## Step 4: Dispatcher web connected to the API
+
+All Dispatcher pages (`apps/web/app/dispatcher/*`, the frontend team's components and styles) now read
+and write through `/api/backend` with the session cookie (`apps/web/features/dispatcher/data/dispatcher.ts`).
+Their mock arrays, fake counters, illustrative maps and fake success notices were removed from the live flow.
+
+- **Session**: `app/dispatcher/layout.tsx` -> `DispatcherShell` checks `/api/session?role=DISPATCHER`
+  (also after reload) and shows the Dispatcher sign-in otherwise: wrong password, wrong role ("This account
+  does not have access to this app.") and expiry use the Step 2 messages. The navbar shows the `/me` email,
+  the depot (from `GET /fleet` `depots`) and a Colombo delivery date that scope every page; Sign out clears
+  the cookie. The sidebar/navbar left the root layout, so `/store` no longer renders them.
+- **Orders**: `GET /dispatcher/orders` with depot, accepted date (or all dates), real status tabs and server
+  pagination. Outlet brand/district, window, van-only access and depot come from the API; brand categories,
+  priority, export, "create order", "defer selected" and "batch plan" were removed (no API). Selection
+  weight/volume are exact sums of the decimal strings.
+- **Fleet inputs** (`/dispatcher/fleet`, new page; the Fleet modal now lists real vehicles): per vehicle and date,
+  availability (Available/Unavailable) and the day's consumed fuel. GET keeps the `ETag`; PUT sends
+  `If-None-Match: *` for an unrecorded day or `If-Match: <ETag>`, then re-reads for the next tag. A 412 reloads
+  and shows the current server value. Fuel is sent as the typed decimal string (validated like the API); future
+  dates cannot take fuel. Missing records read "Not recorded (unknown)", never a default. The page lists the
+  Monday-to-today fuel days the plan week needs.
+- **Plan workspace**: opening the page only looks up the depot/date plan; "Create plan workspace" posts it
+  (409 loads the existing one). Inputs come from `GET /plans/{id}/compatibility` (eligible orders with candidate
+  vehicles and exclusion reasons; vehicles with plan-day availability). The server plans **every** confirmed
+  order of the date, so orders cannot be picked individually (gap below); vehicles are picked by availability.
+  Optimize sends one service entry per eligible outlet, one shift per available vehicle (editable earliest
+  departure/latest return/turnaround, Colombo time; same-day plans default to now + 30 min) and every directed
+  depot/outlet leg. Travel data is **synthetic** (6 km/15 min depot legs, 3 km/10 min between outlets, service
+  10 min by default), sent with `is_synthetic: true` and labelled in the request and on the page. The button is
+  disabled until availability is recorded for every vehicle and fuel for every required day.
+- **Results**: the saved `GET .../revisions/{id}/results` per revision: trips with vehicle, times, distance,
+  fuel, weight/volume per trip against capacity (exact decimal sums of the orders), the stop sequence with
+  arrival/service times and orders, and deferred orders with the server's reason code and text. Unpublished
+  results read "Validated draft snapshot · not published" (`VALIDATED_SNAPSHOT`, `publishable: false`).
+- **Driver assignment and publish**: one driver user ID per trip ("apply to all" helper), then
+  `POST /plans/{plan}/revisions/{revision}/publish` with the revision ID. The publication card shows the
+  effective revision, drivers, `REVALIDATED_AT_PUBLISH` counts and weekly fuel balances. Optimize and publish
+  keep one `request_id` per payload until the server confirms it, so retrying an uncertain failure (network,
+  502/503) can only replay; a changed payload or a confirmed result gets a new ID. A 409 (stale inputs, already
+  published, departure passed) shows the server reason and reloads the plan, publication and inputs.
+- **Live operations** (Trips page) and **dashboard**: `GET /operations/live`, `/operations/trips` (status
+  filter, pagination), `/operations/exceptions` (kind filter, detail dialog) and `/operations/audit` (depot,
+  optional selected trip). Trips show real statuses, loading progress, delivery progress and Store receipts;
+  the stop sequence comes from the effective published revision's saved result. Counts only: on-time/SLA,
+  percentages, ETA, GPS/offline and "late risk" were removed because the API does not return them.
+- **Analytics**: the forecast was illustrative; it now says forecasts/utilisation are unavailable and lists
+  only the configured fleet capacity per vehicle class from `/fleet`. Reports and Warehouses modals link to the
+  audit log and switch between assigned depots.
+
+API gaps (listed, not invented; no backend or contract change in this step):
+
+- No driver directory: the Dispatcher enters the Driver's **user ID**. For the demo:
+  `docker compose exec postgres psql -U <POSTGRES_USER> -d <POSTGRES_DB> -Atc "select id from users where email='driver@waypoint.demo'"`.
+  A `GET /drivers?depot_id=` (id, email/name) would allow a picker.
+- Orders cannot be excluded from an optimization run (the server takes all `CONFIRMED` orders of the date).
+- No real travel-time source; the synthetic matrix is labelled.
+- No Dispatcher stop/trip detail with per-stop outcomes (only counts, exceptions and audit); no outlet names in
+  operations, exceptions or saved stops (shown as short IDs unless the order list has them); no driver names.
+- No forecast, utilisation, SLA/on-time, ETA or GPS data; no exports; no exception resolution, republish or
+  revision edit endpoints. Plan creation, optimization and fleet input edits are not audited (API docs).
+
+Verification (Linux container, Node 22.22, production `next build` + `next start` with `API_INTERNAL_URL`, FastAPI
+on a disposable PostgreSQL 16 database at `0014_audit_events`, demo accounts with a generated password, headless
+Chromium via ad hoc Playwright scripts kept outside the repo; 2026-10-04 ~22:40 Colombo, so orders created
+"for tomorrow" were moved to 6 October by the cutoff):
+
+| Check | Result |
+|---|---|
+| Dispatcher sign-in: wrong password / Store account / correct | PASS: "Email or password is incorrect." / "This account does not have access to this app." / dashboard with `/me` email and depot |
+| Token readable by page scripts | PASS (`document.cookie` empty) |
+| Store creates 3 orders (one 99,999 kg) -> Dispatcher Orders for that date | PASS: 3 confirmed orders with server outlet/window/quantities |
+| Optimize disabled while availability is unknown | PASS ("Record availability for every vehicle") |
+| Availability Available for both vehicles (`If-None-Match: *`) | PASS: 201 each, shown as recorded |
+| Invalid fuel `1.2345` | PASS: validation text, save disabled, nothing sent |
+| Fuel create `0.000` -> replace `12.5` (`If-Match`) -> changed in another session -> save | PASS: 201, 200 (`12.500`), 412 with server text and the other session's `20.000` shown |
+| Create workspace -> optimize | PASS: revision 2, 1 trip, 2 served, oversized order deferred "No compatible vehicle" with server text; synthetic badge |
+| Assign `driver@waypoint.demo` -> publish (double click) | PASS: one POST, 201; publication card with driver, fuel balance |
+| Reload Planning | PASS: same effective revision 2, no optimize/publish controls |
+| Loader API `GET /loader/trips` for the date | PASS: 1 trip, `PLANNED`, demo driver, 2 orders |
+| Stale publication (Store order added after optimize) | PASS: 409 "Current orders, fleet or fuel no longer match this revision; run a new optimization" shown once; re-optimize -> revision 3 |
+| Lost publish response (request reached the server, response dropped) -> publish again | PASS: uncertain message, retry reused the same `request_id`, server replayed 200, revision 3 published |
+| Foreign depot filter via proxy / write without client header | PASS: 403 / 403 |
+| Loader records LOADED + MISSING (note) and ready (API) -> Trips page | PASS: READY trip, 1 loaded 1 missing, "Missing at loading" exception with note, 5 audit entries |
+| Empty date | PASS: "No plan for this depot and date", no trips, no exceptions |
+| Sign out -> reload | PASS: sign-in shown |
+| `pnpm test` | PASS 47/47 (15 new Dispatcher data tests) |
+| `pnpm --filter @waypoint/web typecheck`, `eslint apps/web`, `pnpm build` | PASS |
+| Delivered/failed stops, Store receipts and `RECEIPT_PENDING`/`DELIVERY_FAILED` in live operations | NOT RUN: needs a same-day trip before ~14:00 Colombo (manual step 6 below) |
+| Two trips with one driver overlapping (422), fuel quota deferral/conflict, same-day plan default departure | NOT RUN (manual steps 4–5) |
+| Automated browser E2E in the repo | NOT ADDED: no E2E runner in the repo |
+
+Manual verification (your machine, real API, demo data; never record the password):
+
+1. `docker compose up -d --build --wait api`, `alembic upgrade head`, `app.auth.seed --demo`, `app.fleet.seed --demo`
+   (see Demo data), then `corepack pnpm build` and `corepack pnpm --filter @waypoint/web start`.
+2. Store web (`/store`, `store@waypoint.demo`): create two small orders (one chilled) and one 99999 kg order for
+   tomorrow; note the accepted date.
+3. `/dispatcher` as `dispatcher@waypoint.demo` (also try a wrong password and the Store account). Set the
+   navbar date to the accepted date. Orders: the 3 orders appear. Fleet inputs: mark both vehicles Available;
+   if the plan week has started, record each day's fuel (try `1.2345`, then a valid value; edit the same value in
+   a second browser and save in the first: 412 message). Planning: Create plan workspace -> Run optimization ->
+   served trip(s) and the deferred order with its reason. Enter the demo Driver's user ID (gap above), Apply to
+   all trips, double-click Publish -> one publication. Reload: same effective revision. Loader app or
+   `GET /loader/trips?delivery_date=...`: the trips are visible.
+4. Stale publication: on another date, optimize, create one more Store order for that date, publish -> 409
+   reason shown; Run optimization again, publish.
+5. Overlap: with two trips and one driver, set overlapping shifts (both 07:30–18:00) -> publish shows the 422
+   reason; set van 07:30–10:00 and truck 10:15–12:45, re-optimize, publish.
+6. Live operations: `app.demo.scenario --stage operations` (today, before ~14:00 Colombo) -> Trips for today shows
+   delivered and failed stops, the `MISSING` exception, the pending receipt; confirm the receipt in the Store app
+   -> receipts confirmed increments, `RECEIPT_CONFIRMED` appears in the audit log.
+7. Wrong depot: `/api/backend/dispatcher/orders?depot_id=<another depot UUID>` in the signed-in browser -> 403.
+   Double submit/replay: double-click Run optimization and Publish -> one revision / one publication.
+   Empty data: choose a date without orders -> empty states; creating that plan and optimizing saves an empty revision.
 
 ## Step 5: Loader mobile connected to the API (online)
 
@@ -349,4 +465,4 @@ Manual check: follow the Step 7 table with `driver@waypoint.demo` and Expo Go SD
 
 ## Next step
 
-Step 9 acceptance (needs Step 4 Dispatcher web).
+Step 9 acceptance on `feature/integration-release-validation` once Step 8 is merged.
