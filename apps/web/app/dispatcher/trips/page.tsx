@@ -1,663 +1,275 @@
-
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
+import type {
+  AuditEventResponse, OperationsExceptionKind, OperationsExceptionResponse, OperationsTripResponse, TripStatus, VehicleResponse,
+} from "@waypoint/api-contracts";
 import "./trips.css";
+import { useDispatcher } from "../../../features/dispatcher/components/DispatcherShell";
+import { Empty, Kv, LoadError, Loading, Pager, TripBadge, useLoad } from "../../../features/dispatcher/components/ui";
+import {
+  EXCEPTION_KINDS, EXCEPTION_LABEL, TRIP_STATUSES, TRIP_STATUS_LABEL, formatDate, formatDateTime, formatTime,
+  getFleet, getLive, getPublication, getResults, listAudit, listExceptions, listOperationTrips, shortId, vehicleLabel,
+} from "../../../features/dispatcher/data/dispatcher";
 
-type TripStatus =
-  | "On Schedule"
-  | "Late Risk"
-  | "Issue"
-  | "Offline";
+const PAGE = 20;
 
-type Trip = {
-  id: string;
-  route: string;
-  driver: string;
-  depot: string;
-  status: TripStatus;
-  completed: number;
-  total: number;
-  next: string;
-  eta: string;
-};
-
-const trips: Trip[] = [
-  {
-    id: "VEH-018",
-    route: "Trip 1",
-    driver: "Kasun Perera",
-    depot: "Colombo",
-    status: "On Schedule",
-    completed: 3,
-    total: 6,
-    next: "Cargills - Kandy",
-    eta: "10:00 AM",
-  },
-  {
-    id: "VEH-033",
-    route: "Trip 1",
-    driver: "Nimal Silva",
-    depot: "Colombo",
-    status: "Late Risk",
-    completed: 4,
-    total: 5,
-    next: "Lanka Pharmacy",
-    eta: "11:30 AM",
-  },
-  {
-    id: "VEH-044",
-    route: "Trip 1",
-    driver: "Amal Fernando",
-    depot: "Colombo",
-    status: "Issue",
-    completed: 2,
-    total: 5,
-    next: "City Hardware",
-    eta: "12:10 PM",
-  },
-  {
-    id: "VEH-052",
-    route: "Trip 2",
-    driver: "Saman Kumara",
-    depot: "Jaffna",
-    status: "Offline",
-    completed: 2,
-    total: 6,
-    next: "Jaffna",
-    eta: "Unknown",
-  },
-  {
-    id: "VEH-021",
-    route: "Trip 2",
-    driver: "Dilan Jay",
-    depot: "Colombo",
-    status: "Issue",
-    completed: 1,
-    total: 4,
-    next: "Peliyagoda",
-    eta: "12:40 PM",
-  },
-];
-
-const exceptions = [
-  {
-    time: "08:52",
-    type: "LOADER",
-    severity: "SHORTFALL",
-    vehicle: "VEH-044 · ORD-7786",
-    description:
-      "2 cartons missing from ORD-7786 at Peliyagoda dock",
-  },
-  {
-    time: "09:14",
-    type: "DRIVER",
-    severity: "PARTIAL DELIVERY",
-    vehicle: "VEH-033 · ORD-7789",
-    description:
-      "8 / 10 items delivered; 2 items unavailable at outlet",
-  },
-  {
-    time: "09:37",
-    type: "DRIVER",
-    severity: "NOT DELIVERED",
-    vehicle: "VEH-021 · ORD-7794",
-    description:
-      "Outlet closed upon driver arrival; action required",
-  },
-  {
-    time: "09:48",
-    type: "STORE MANAGER",
-    severity: "RECEIPT ISSUE",
-    vehicle: "ORD-7791 · Lanka Pharm.",
-    description:
-      "Store manager reported quantity discrepancy on signed invoice",
-  },
-];
-
-const filters = [
-  "All",
-  "On Time",
-  "In Progress",
-  "Late Risk",
-  "Issues",
-  "Offline",
-];
-
+/** Live operations of the effective published plans: trips, loading, delivery, receipts and audit. */
 export default function TripsPage() {
-  const [activeFilter, setActiveFilter] = useState("All");
-  const [search, setSearch] = useState("");
-  const [depot, setDepot] = useState("All Depots");
-  const [selectedTrip, setSelectedTrip] = useState("VEH-018");
-  const [lastRefresh, setLastRefresh] = useState("11:42 AM");
-  const [notice, setNotice] = useState("");
-  const [openException, setOpenException] = useState<
-    (typeof exceptions)[number] | null
-  >(null);
+  const { depotId, day, onExpired } = useDispatcher();
+  const scope = { depot_id: depotId, delivery_date: day };
+  const key = `${depotId}:${day}`;
+  const [status, setStatus] = useState<TripStatus | "ALL">("ALL");
+  const [page, setPage] = useState(0);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [lastRefresh, setLastRefresh] = useState(() => new Date().toISOString());
 
-  const filteredTrips = useMemo(() => {
-    return trips.filter((trip) => {
-      const matchesSearch =
-        `${trip.id} ${trip.driver} ${trip.next} ${trip.route}`
-          .toLowerCase()
-          .includes(search.toLowerCase());
+  const live = useLoad(() => getLive(scope), onExpired, `${key}:${lastRefresh}`);
+  const trips = useLoad(() => listOperationTrips({ ...scope, status: status === "ALL" ? undefined : status, limit: PAGE, offset: page * PAGE }), onExpired, `${key}:${status}:${page}:${lastRefresh}`);
+  const fleet = useLoad(() => getFleet(depotId), onExpired, depotId);
+  const vehicles = new Map((fleet.data?.items ?? []).map((v) => [v.id, v]));
 
-      const matchesDepot =
-        depot === "All Depots" || trip.depot === depot;
-
-      const matchesFilter =
-        activeFilter === "All" ||
-        (activeFilter === "On Time" &&
-          trip.status === "On Schedule") ||
-        (activeFilter === "In Progress" &&
-          trip.completed > 0 &&
-          trip.status !== "Offline") ||
-        (activeFilter === "Late Risk" &&
-          trip.status === "Late Risk") ||
-        (activeFilter === "Issues" &&
-          trip.status === "Issue") ||
-        (activeFilter === "Offline" &&
-          trip.status === "Offline");
-
-      return matchesSearch && matchesDepot && matchesFilter;
-    });
-  }, [activeFilter, search, depot]);
-
-  const selected = trips.find(
-    (trip) => trip.id === selectedTrip
-  );
-
-  const showNotice = (message: string) => {
-    setNotice(message);
-  };
+  const s = live.data;
+  const tripTotal = s ? TRIP_STATUSES.reduce((n, t) => n + s.trips_by_status[t], 0) : 0;
+  const exceptionTotal = s ? EXCEPTION_KINDS.reduce((n, k) => n + s.exceptions[k], 0) : 0;
+  const selected = trips.data?.items.find((t) => t.trip.trip_id === selectedId) ?? trips.data?.items[0] ?? null;
 
   return (
     <main className="trips-page">
       <header className="trips-heading">
         <div>
-          <div className="trips-breadcrumb">
-            OPERATIONS <span>/</span> <b>Trips</b>
-          </div>
-          <h1>
-            Live Operations
-            <span className="dispatch-badge">
-              FLEET DISPATCH
-            </span>
-          </h1>
-          <p>
-            Monitor active trips, delivery progress and field
-            exceptions in real time.
-          </p>
+          <div className="trips-breadcrumb">OPERATIONS <span>/</span> <b>Trips</b></div>
+          <h1>Live Operations <span className="dispatch-badge">PUBLISHED PLANS</span></h1>
+          <p>Trips of each plan&apos;s effective published revision for {formatDate(day)}. Read-only: the API has no override actions.</p>
         </div>
-
         <div className="trips-actions">
-          <button
-            className="trip-button"
-            onClick={() =>
-              showNotice("Showing operational date: Sep 25, 2026")
-            }
-          >
-            ▣ Today: Sep 25, 2026
-          </button>
-
-          <button
-            className="trip-button"
-            onClick={() => {
-              setLastRefresh(
-                new Date().toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })
-              );
-              showNotice("Dashboard refreshed.");
-            }}
-          >
-            ↻ Manual Refresh
-          </button>
-
-          <button
-            className="trip-button trip-primary"
-            onClick={() =>
-              showNotice(
-                "Fleet note composer is ready. Connect your broadcast API to send notes."
-              )
-            }
-          >
-            ▣ Broadcast Fleet Note
-          </button>
+          <button className="trip-button" onClick={() => setLastRefresh(new Date().toISOString())}>↻ Refresh</button>
         </div>
       </header>
 
-      <section className="live-strip">
-        <span className="live-dot" />
-        <strong>LIVE OPERATIONS</strong>
-        <span>·</span>
-        <b>18</b> active trips
-        <span>·</span>
-        <b className="green-text">31</b> stops completed
-        <span>·</span>
-        <b className="red-text">4</b> active exceptions
-        <small>Last sync: {lastRefresh}</small>
-      </section>
+      {live.loading && !s ? <Loading t="Loading operations…" /> : live.error ? <LoadError error={live.error} retry={live.reload} /> : s && (
+        <>
+          <section className="live-strip">
+            <span className="live-dot" />
+            <strong>SERVER SNAPSHOT</strong>
+            <span>·</span> <b>{tripTotal}</b> trips
+            <span>·</span> <b className="green-text">{s.delivery.delivered_stops}</b> stops delivered
+            <span>·</span> <b className="red-text">{exceptionTotal}</b> exceptions
+            <small>Loaded {formatTime(lastRefresh)} (Colombo)</small>
+          </section>
 
-      {notice && (
-        <div className="trips-notice" role="status">
-          {notice}
-          <button
-            onClick={() => setNotice("")}
-            aria-label="Dismiss notification"
-          >
-            ×
-          </button>
-        </div>
+          <section className="trip-stats">
+            <Stat label="PLANS" value={`${s.published_plans}`} suffix="published" description={`${s.draft_plans} draft (not visible to Loaders/Drivers)`} color="blue" />
+            <Stat label="IN PROGRESS" value={`${s.trips_by_status.IN_PROGRESS}`} suffix="trips" description={`${s.trips_by_status.READY} ready · ${s.trips_by_status.COMPLETED} completed`} color="blue" />
+            <Stat label="LOADING" value={`${s.loading.loaded}/${s.loading.orders}`} suffix="loaded" description={`${s.loading.pending} pending · ${s.loading.missing} missing · ${s.loading.damaged} damaged`} color="green" />
+            <Stat label="DELIVERY" value={`${s.delivery.delivered_stops}/${s.delivery.stops_requiring_visit}`} suffix="stops" description={`${s.delivery.failed_stops} failed · ${s.delivery.open_stops} open · ${s.delivery.delivered_orders} orders delivered`} color="green" />
+            <Stat label="STORE RECEIPTS" value={`${s.delivery.receipts_confirmed}`} suffix="confirmed" description={`${s.receipts_pending} orders awaiting receipt`} color="orange" />
+            <Stat label="DEFERRED" value={`${s.deferred_orders}`} suffix="orders" description="Not served by the published plans" color="gray" />
+          </section>
+
+          <section className="trip-toolbar">
+            <div className="trip-filters">
+              {(["ALL", ...TRIP_STATUSES] as const).map((t) => (
+                <button key={t} onClick={() => { setStatus(t); setPage(0); }} className={`filter-chip ${status === t ? "filter-active" : ""}`}>
+                  {t === "ALL" ? `All (${tripTotal})` : `${TRIP_STATUS_LABEL[t]} (${s.trips_by_status[t]})`}
+                </button>
+              ))}
+            </div>
+          </section>
+        </>
       )}
-
-      <section className="trip-stats">
-        <Stat label="ACTIVE TRIPS" value="18" suffix="units"
-          description="Currently on route" color="blue" />
-        <Stat label="DELIVERED STOPS" value="31" suffix="stops"
-          description="Completed today" color="green" />
-        <Stat label="IN PROGRESS" value="5" suffix="docks"
-          description="Currently being served" color="blue" />
-        <Stat label="LATE RISK" value="8" suffix="stops"
-          description="Tight delivery windows" color="orange" />
-        <Stat label="ISSUES" value="4" suffix="unresolved"
-          description="Action required" color="red" />
-        <Stat label="OFFLINE" value="1" suffix="unit"
-          description="Last heard 06:12" color="gray" />
-      </section>
-
-      <section className="trip-toolbar">
-        <div className="trip-filters">
-          {filters.map((filter) => (
-            <button
-              key={filter}
-              onClick={() => setActiveFilter(filter)}
-              className={`filter-chip ${
-                activeFilter === filter ? "filter-active" : ""
-              } filter-${filter.toLowerCase().replaceAll(" ", "-")}`}
-            >
-              {filter}
-              {filter === "All" && " (18)"}
-              {filter === "On Time" && " (10)"}
-              {filter === "In Progress" && " (5)"}
-              {filter === "Late Risk" && " (8)"}
-              {filter === "Issues" && " (4)"}
-              {filter === "Offline" && " (1)"}
-            </button>
-          ))}
-        </div>
-
-        <div className="trip-search-tools">
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="⌕ Search vehicle, driver or order..."
-            aria-label="Search trips"
-          />
-          <select
-            value={depot}
-            onChange={(event) => setDepot(event.target.value)}
-            aria-label="Filter by depot"
-          >
-            <option>All Depots</option>
-            <option>Colombo</option>
-            <option>Jaffna</option>
-          </select>
-        </div>
-      </section>
 
       <section className="trip-main-grid">
-        <div className="panel map-panel">
-          <PanelHeader
-            title="LIVE OPERATIONS MAP"
-            detail="18 Active Trips"
-            extra="Corridor Health: Optimal (94%)"
-          />
-          <div className="colombo-map">
-            <div className="map-water" />
-            <svg
-              className="map-drawing"
-              viewBox="0 0 600 400"
-              preserveAspectRatio="none"
-              role="img"
-              aria-label="Illustrative Colombo vehicle route map"
-            >
-              <path
-                className="water-shape"
-                d="M0 0 H93 L106 44 L187 48 L230 34 L298 53 L371 33 L455 46 L492 28 L600 43 V0 Z"
-              />
-              <path className="park-shape"
-                d="M456 160 L512 148 L548 192 L504 210 L462 192 Z" />
-              <path className="park-shape"
-                d="M324 275 L361 269 L386 311 L342 329 L315 302 Z" />
-
-              {Array.from({ length: 8 }).map((_, i) => (
-                <path
-                  key={`h${i}`}
-                  className="map-road"
-                  d={`M${100 + i * 7} ${80 + i * 38} L600 ${55 + i * 38}`}
-                />
-              ))}
-              {Array.from({ length: 7 }).map((_, i) => (
-                <path
-                  key={`v${i}`}
-                  className="map-road"
-                  d={`M${100 + i * 68} 0 L${160 + i * 53} 400`}
-                />
-              ))}
-
-              <path
-                className="route-line"
-                d="M188 145 L205 210 L315 209 L371 253 L390 324 L510 315 L480 245 L440 205 L365 193 L315 209"
-              />
-              <path
-                className="route-warning"
-                d="M315 209 L390 224 L480 245"
-              />
-              <path
-                className="route-line"
-                d="M188 145 L348 125 L436 125 L443 65"
-              />
-
-              {[
-                [188, 145, "1"],
-                [315, 209, "2"],
-                [371, 253, "3"],
-                [510, 315, "4"],
-              ].map(([x, y, label]) => (
-                <g key={label}>
-                  <circle
-                    cx={x}
-                    cy={y}
-                    r="11"
-                    fill="#2160f5"
-                    stroke="white"
-                    strokeWidth="2"
-                  />
-                  <text
-                    x={x}
-                    y={Number(y) + 4}
-                    textAnchor="middle"
-                    className="map-number"
-                  >
-                    {label}
-                  </text>
-                </g>
-              ))}
-
-              <circle cx="440" cy="205" r="11" fill="#e98100"
-                stroke="white" strokeWidth="2" />
-              <text x="440" y="209" textAnchor="middle"
-                className="map-number">!</text>
-
-              <circle cx="443" cy="65" r="12" fill="#111827"
-                stroke="white" strokeWidth="2" />
-              <text x="443" y="69" textAnchor="middle"
-                className="map-number">DC</text>
-            </svg>
-
-            <div className="map-label label-river">Kelani River</div>
-            <div className="map-label label-peliyagoda">Peliyagoda</div>
-            <div className="map-label label-pettah">Pettah</div>
-            <div className="map-label label-fort">Colombo Fort</div>
-            <div className="map-label label-maradana">Maradana</div>
-            <div className="map-label label-borella">Borella</div>
-            <div className="map-label label-cinnamon">Cinnamon Gardens</div>
-            <div className="map-label label-kollupitiya">Kollupitiya</div>
-            <div className="map-label label-ocean">Indian Ocean</div>
-            <div className="map-legend">Colombo · illustrative routes</div>
-          </div>
-        </div>
-
         <div className="panel active-trips-panel">
-          <PanelHeader
-            title="ACTIVE TRIPS"
-            extra={`${filteredTrips.length} Shown`}
-          />
-
-          <div className="active-trip-list">
-            {filteredTrips.length === 0 ? (
-              <div className="empty-trips">
-                No trips match your filters.
-              </div>
-            ) : (
-              filteredTrips.map((trip) => (
-                <button
-                  key={trip.id}
-                  className={`active-trip-card ${
-                    selectedTrip === trip.id ? "trip-selected" : ""
-                  }`}
-                  onClick={() => setSelectedTrip(trip.id)}
-                >
-                  <div className="active-trip-top">
-                    <strong>{trip.id}</strong>
-                    <span>· {trip.route}</span>
-                    <StatusBadge status={trip.status} />
-                    <span className="trip-progress-count">
-                      {trip.completed}/{trip.total} stops
-                    </span>
-                  </div>
-
-                  <div className="stop-progress">
-                    {Array.from({ length: trip.total }).map((_, i) => (
-                      <span
-                        key={i}
-                        className={
-                          i < trip.completed
-                            ? trip.status === "Issue" && i === 1
-                              ? "progress-red"
-                              : "progress-green"
-                            : trip.status === "Late Risk"
-                              ? "progress-orange"
-                              : "progress-pending"
-                        }
-                      />
-                    ))}
-                  </div>
-
-                  <div className="active-trip-bottom">
-                    <span>Next: {trip.next}</span>
-                    <strong>
-                      {trip.eta === "Unknown"
-                        ? "No signal"
-                        : `ETA ${trip.eta}`}
-                    </strong>
-                  </div>
-                </button>
-              ))
-            )}
-          </div>
-
-          <div className="selected-trip">
-            <div className="selected-trip-heading">
-              <div>
-                <small>SELECTED TRIP</small>
-                <h3>
-                  {selected?.id ?? "VEH-018"} ·{" "}
-                  {selected?.route ?? "Trip 1"}
-                </h3>
-              </div>
-              <StatusBadge status={selected?.status ?? "On Schedule"} />
+          <div className="panel-header"><h2><span className="panel-header-icon">▣</span> TRIPS</h2><span className="panel-extra">{trips.data?.total ?? 0} total</span></div>
+          {trips.loading ? <Loading t="Loading trips…" /> : trips.error ? <LoadError error={trips.error} retry={trips.reload} /> : !trips.data?.items.length ? (
+            <div className="empty-trips">No published trips for this depot, date and status.</div>
+          ) : (
+            <div className="active-trip-list">
+              {trips.data.items.map((item) => (
+                <TripCard key={item.trip.trip_id} item={item} vehicle={vehicles.get(item.trip.vehicle_id)} selected={selected?.trip.trip_id === item.trip.trip_id} onSelect={() => setSelectedId(item.trip.trip_id)} />
+              ))}
             </div>
+          )}
+          <Pager total={trips.data?.total ?? 0} page={page} size={PAGE} busy={trips.loading} onPage={setPage} />
+        </div>
 
-            <p>
-              {selected?.completed ?? 0} / {selected?.total ?? 0} stops
-              {" · "}Next: {selected?.next ?? "—"}
-            </p>
-
-            {[
-              ["Cargills – Colombo", "Delivered 08:12 AM", true],
-              ["Food City – Galle", "Delivered 09:02 AM", true],
-              [selected?.next ?? "Next stop", "In Progress", false],
-              ["Lanka Pharmacy – Kandy", "Pending", false],
-            ].map(([name, status, done]) => (
-              <div className="stop-row" key={String(name)}>
-                <span className={`stop-icon ${done ? "stop-done" : ""}`}>
-                  {done ? "✓" : "•"}
-                </span>
-                <strong>{name}</strong>
-                <span className={done ? "green-text" : ""}>
-                  {status}
-                </span>
-              </div>
-            ))}
-          </div>
+        <div className="panel">
+          {selected ? <TripDetail key={selected.trip.trip_id} item={selected} vehicle={vehicles.get(selected.trip.vehicle_id)} onExpired={onExpired} />
+            : <Empty t="No trip selected" d="Published trips appear here once a plan is published." />}
         </div>
       </section>
 
-      <section className="panel exceptions-panel">
-        <div className="exceptions-heading">
-          <h2><span className="exception-icon">♧</span> EXCEPTIONS · 4 ACTIVE</h2>
-          <span className="urgent-badge">2 Require Immediate Action</span>
-        </div>
-
-        <div className="exception-list">
-          {exceptions.map((exception) => (
-            <div className="exception-row" key={exception.time}>
-              <span className="exception-time">{exception.time}</span>
-              <span className="exception-type">{exception.type}</span>
-              <span className={`exception-severity severity-${exception.severity.toLowerCase().replaceAll(" ", "-")}`}>
-                {exception.severity}
-              </span>
-              <strong className="exception-vehicle">{exception.vehicle}</strong>
-              <span className="exception-description">
-                {exception.description}
-              </span>
-              <button
-                className="exception-open"
-                onClick={() => setOpenException(exception)}
-              >
-                Open Exception
-              </button>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <div className="recovery-actions">
-        <button className="trip-primary"
-          onClick={() => setOpenException(exceptions[0])}>
-          Review exceptions →
-        </button>
-        <button className="trip-button"
-          onClick={() => showNotice("Revision history opened.")}>
-          Revision history
-        </button>
-        <button className="trip-button"
-          onClick={() => showNotice("All-clear summary prepared.")}>
-          All-clear summary
-        </button>
-      </div>
-
-      <section className="recovery-panel">
-        <h2>Operational recovery</h2>
-        <p>
-          Review incidents and demonstrate recovery without losing
-          dispatch context.
-        </p>
-        <button
-          className="trip-button"
-          onClick={() =>
-            showNotice("Recovery scenarios are ready to configure.")
-          }
-        >
-          Open recovery scenarios
-        </button>
-      </section>
-
-      {openException && (
-        <div
-          className="trip-modal-backdrop"
-          onClick={() => setOpenException(null)}
-        >
-          <section
-            className="trip-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="exception-title"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <button
-              className="trip-modal-close"
-              onClick={() => setOpenException(null)}
-              aria-label="Close dialog"
-            >
-              ×
-            </button>
-            <small>FIELD EXCEPTION · {openException.time}</small>
-            <h2 id="exception-title">{openException.severity}</h2>
-            <p><strong>{openException.vehicle}</strong></p>
-            <p>{openException.description}</p>
-            <p>Reported by: {openException.type}</p>
-            <button
-              className="trip-primary"
-              onClick={() => {
-                setNotice(
-                  `Exception ${openException.vehicle} marked for review.`
-                );
-                setOpenException(null);
-              }}
-            >
-              Mark for Review
-            </button>
-          </section>
-        </div>
-      )}
+      <Exceptions key={`${key}:${lastRefresh}`} scope={scope} onExpired={onExpired} />
+      <AuditLog key={`audit:${key}:${lastRefresh}`} depotId={depotId} tripId={selected?.trip.trip_id ?? null} onExpired={onExpired} />
     </main>
   );
 }
 
-function Stat({
-  label,
-  value,
-  suffix,
-  description,
-  color,
-}: {
-  label: string;
-  value: string;
-  suffix: string;
-  description: string;
-  color: string;
-}) {
+function TripCard({ item, vehicle, selected, onSelect }: { item: OperationsTripResponse; vehicle?: VehicleResponse; selected: boolean; onSelect: () => void }) {
+  const { trip, delivery } = item;
+  const done = delivery.delivered_stops + delivery.failed_stops;
+  return (
+    <button className={`active-trip-card ${selected ? "trip-selected" : ""}`} onClick={onSelect}>
+      <div className="active-trip-top">
+        <strong>{vehicle ? vehicleLabel(vehicle) : shortId(trip.vehicle_id)}</strong>
+        <span>· Trip {trip.trip_number}</span>
+        <TripBadge status={trip.status} />
+        <span className="trip-progress-count">{done}/{delivery.stops_requiring_visit} stops</span>
+      </div>
+      <div className="stop-progress">
+        {Array.from({ length: delivery.stops_requiring_visit }).map((_, i) => (
+          <span key={i} className={i < delivery.delivered_stops ? "progress-green" : i < done ? "progress-red" : "progress-pending"} />
+        ))}
+      </div>
+      <div className="active-trip-bottom">
+        <span>Driver {trip.driver_id ? shortId(trip.driver_id) : "unassigned"}</span>
+        <strong>{formatTime(trip.departure_at)}–{formatTime(trip.return_at)}</strong>
+      </div>
+    </button>
+  );
+}
+
+function TripDetail({ item, vehicle, onExpired }: { item: OperationsTripResponse; vehicle?: VehicleResponse; onExpired: () => void }) {
+  const { trip, loading, delivery } = item;
+  // Stop sequence comes from the saved result of the plan's effective published revision.
+  const stops = useLoad(async () => {
+    const publication = await getPublication(trip.plan_id);
+    if (!publication) return null;
+    const result = await getResults(trip.plan_id, publication.revision_id);
+    return result?.trips.find((t) => t.id === trip.trip_id)?.stops ?? null;
+  }, onExpired, trip.trip_id);
+
+  return (
+    <div className="selected-trip">
+      <div className="selected-trip-heading">
+        <div>
+          <small>SELECTED TRIP</small>
+          <h3>{vehicle ? vehicleLabel(vehicle) : shortId(trip.vehicle_id)} · Trip {trip.trip_number}</h3>
+        </div>
+        <TripBadge status={trip.status} />
+      </div>
+      <Kv a="Driver" b={trip.driver_id ? <span title={trip.driver_id}>{shortId(trip.driver_id)}</span> : "Unassigned"} />
+      <Kv a="Planned" b={`${formatTime(trip.departure_at)}–${formatTime(trip.return_at)}`} />
+      <Kv a="Stops / orders" b={`${trip.stop_count} / ${trip.order_count}`} />
+      <Kv a="Loading" b={`${loading.loaded} loaded · ${loading.missing} missing · ${loading.damaged} damaged · ${loading.pending} pending`} />
+      <Kv a="Delivery" b={`${delivery.delivered_stops} delivered · ${delivery.failed_stops} failed · ${delivery.open_stops} open of ${delivery.stops_requiring_visit}`} />
+      <Kv a="Store receipts" b={`${delivery.receipts_confirmed} of ${delivery.delivered_orders} delivered orders`} />
+      <p className="dx-muted">Per-stop outcomes appear under exceptions and in the audit log; the API has no Dispatcher stop view.</p>
+      {stops.loading ? <Loading t="Loading stop sequence…" /> : stops.error ? <LoadError error={stops.error} retry={stops.reload} /> : stops.data ? stops.data.map((stop) => (
+        <div className="stop-row" key={stop.id}>
+          <span className="stop-icon">{stop.sequence_number}</span>
+          <strong title={stop.outlet_id}>Outlet {shortId(stop.outlet_id)} · {stop.order_ids.length} order{stop.order_ids.length === 1 ? "" : "s"}</strong>
+          <span>Planned arrival {formatTime(stop.arrival_at)}</span>
+        </div>
+      )) : <p className="dx-muted">Stop sequence unavailable.</p>}
+    </div>
+  );
+}
+
+function Exceptions({ scope, onExpired }: { scope: { depot_id: string; delivery_date: string }; onExpired: () => void }) {
+  const [kind, setKind] = useState<OperationsExceptionKind | "ALL">("ALL");
+  const [page, setPage] = useState(0);
+  const [open, setOpen] = useState<OperationsExceptionResponse | null>(null);
+  const list = useLoad(() => listExceptions({ ...scope, kind: kind === "ALL" ? undefined : kind, limit: PAGE, offset: page * PAGE }), onExpired, `${kind}:${page}`);
+
+  return (
+    <section className="panel exceptions-panel">
+      <div className="exceptions-heading">
+        <h2><span className="exception-icon">♧</span> EXCEPTIONS · {list.data?.total ?? 0}</h2>
+      </div>
+      <div className="trip-filters">
+        {(["ALL", ...EXCEPTION_KINDS] as const).map((k) => (
+          <button key={k} className={`filter-chip ${kind === k ? "filter-active" : ""}`} onClick={() => { setKind(k); setPage(0); }}>
+            {k === "ALL" ? "All" : EXCEPTION_LABEL[k]}
+          </button>
+        ))}
+      </div>
+      {list.loading ? <Loading /> : list.error ? <LoadError error={list.error} retry={list.reload} /> : !list.data?.items.length ? (
+        <div className="empty-trips">No exceptions for this depot and date.</div>
+      ) : (
+        <div className="exception-list">
+          {list.data.items.map((e) => (
+            <div className="exception-row" key={`${e.kind}:${e.source_id}`}>
+              <span className="exception-time">{formatTime(e.occurred_at)}</span>
+              <span className="exception-type">{e.severity === "PENDING" ? "PENDING" : "FAILURE"}</span>
+              <span className="exception-severity">{EXCEPTION_LABEL[e.kind]}</span>
+              <strong className="exception-vehicle">Trip {shortId(e.trip_id)}{e.outlet_id ? ` · outlet ${shortId(e.outlet_id)}` : ""}</strong>
+              <span className="exception-description">{[e.reason_code, e.note].filter(Boolean).join(" · ") || `${e.order_ids.length} order(s)`}</span>
+              <button className="exception-open" onClick={() => setOpen(e)}>Details</button>
+            </div>
+          ))}
+        </div>
+      )}
+      <Pager total={list.data?.total ?? 0} page={page} size={PAGE} busy={list.loading} onPage={setPage} />
+
+      {open && (
+        <div className="trip-modal-backdrop" onClick={() => setOpen(null)}>
+          <section className="trip-modal" role="dialog" aria-modal="true" aria-labelledby="exception-title" onClick={(event) => event.stopPropagation()}>
+            <button className="trip-modal-close" onClick={() => setOpen(null)} aria-label="Close dialog">×</button>
+            <small>{open.severity} · {formatDateTime(open.occurred_at)}</small>
+            <h2 id="exception-title">{EXCEPTION_LABEL[open.kind]}</h2>
+            <Kv a="Trip" b={<span title={open.trip_id}>{shortId(open.trip_id)}</span>} />
+            {open.stop_id && <Kv a="Stop" b={shortId(open.stop_id)} />}
+            {open.outlet_id && <Kv a="Outlet" b={shortId(open.outlet_id)} />}
+            <Kv a="Orders" b={open.order_ids.map(shortId).join(", ") || "—"} />
+            <Kv a="Reason" b={open.reason_code ?? "—"} />
+            <Kv a="Note" b={open.note ?? "—"} />
+            <Kv a="Recorded by" b={open.actor_id ? shortId(open.actor_id) : "—"} />
+            <p className="dx-muted">Read-only: resolving or re-planning exceptions is not available in the API.</p>
+          </section>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function AuditLog({ depotId, tripId, onExpired }: { depotId: string; tripId: string | null; onExpired: () => void }) {
+  const [onlyTrip, setOnlyTrip] = useState(false);
+  const [page, setPage] = useState(0);
+  const filterTrip = onlyTrip && tripId ? tripId : undefined;
+  const list = useLoad(() => listAudit({ depot_id: depotId, trip_id: filterTrip, limit: PAGE, offset: page * PAGE }), onExpired, `${filterTrip}:${page}`);
+
+  return (
+    <section className="panel exceptions-panel" id="audit">
+      <div className="exceptions-heading">
+        <h2><span className="exception-icon">▤</span> AUDIT LOG · {list.data?.total ?? 0}</h2>
+        {tripId && (
+          <label className="dx-muted"><input type="checkbox" checked={onlyTrip} onChange={(e) => { setOnlyTrip(e.target.checked); setPage(0); }} /> Selected trip only</label>
+        )}
+      </div>
+      {list.loading ? <Loading /> : list.error ? <LoadError error={list.error} retry={list.reload} /> : !list.data?.items.length ? (
+        <div className="empty-trips">No audit entries yet. Publishing, loading, delivery and receipts are recorded here.</div>
+      ) : (
+        <div className="dx-table-wrap">
+          <table className="dx-table">
+            <thead><tr><th>TIME (COLOMBO)</th><th>ACTION</th><th>ENTITY</th><th>TRIP</th><th>ACTOR</th><th>DETAILS</th></tr></thead>
+            <tbody>
+              {list.data.items.map((a: AuditEventResponse) => (
+                <tr key={a.id}>
+                  <td>{formatDateTime(a.occurred_at)}</td>
+                  <td><span className="dx-badge">{a.action}</span></td>
+                  <td>{a.entity_type} {shortId(a.entity_id)}</td>
+                  <td>{a.trip_id ? shortId(a.trip_id) : "—"}</td>
+                  <td title={a.actor_id}>{shortId(a.actor_id)}</td>
+                  <td><code style={{ fontSize: 11, wordBreak: "break-all" }}>{JSON.stringify(a.details)}</code></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <Pager total={list.data?.total ?? 0} page={page} size={PAGE} busy={list.loading} onPage={setPage} />
+    </section>
+  );
+}
+
+function Stat({ label, value, suffix, description, color }: { label: string; value: string; suffix: string; description: string; color: string }) {
   return (
     <div className="stat-card">
       <span className="stat-label">{label}</span>
-      <div className={`stat-value ${color}`}>
-        {value} <small>{suffix}</small>
-      </div>
+      <div className={`stat-value ${color}`}>{value} <small>{suffix}</small></div>
       <p>{description}</p>
     </div>
   );
 }
-
-function PanelHeader({
-  title,
-  detail,
-  extra,
-}: {
-  title: string;
-  detail?: string;
-  extra?: string;
-}) {
-  return (
-    <div className="panel-header">
-      <h2><span className="panel-header-icon">▣</span> {title}</h2>
-      {detail && <span className="panel-detail">{detail}</span>}
-      {extra && <span className="panel-extra">{extra}</span>}
-    </div>
-  );
-}
-
-function StatusBadge({ status }: { status: TripStatus }) {
-  const classes: Record<TripStatus, string> = {
-    "On Schedule": "status-on-time",
-    "Late Risk": "status-late",
-    Issue: "status-issue",
-    Offline: "status-offline",
-  };
-
-  return <span className={`status-badge ${classes[status]}`}>{status}</span>;
-}
-

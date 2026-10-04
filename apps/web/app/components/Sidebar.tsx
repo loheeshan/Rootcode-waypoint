@@ -7,9 +7,11 @@ import { useState } from 'react';
 import FleetModal from './dispatcher/FleetModal';
 import WarehouseModal from './dispatcher/WarehouseModal';
 import ReportsModal from './dispatcher/ReportsModal';
+import { useDispatcher } from '../../features/dispatcher/components/DispatcherShell';
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const { signOut } = useDispatcher();
 
   const [modal, setModal] = useState<
     'fleet' | 'warehouse' | 'reports' | null
@@ -35,6 +37,11 @@ export default function Sidebar() {
       name: 'Trips',
       href: '/dispatcher/trips',
       icon: '▱',
+    },
+    {
+      name: 'Fleet inputs',
+      href: '/dispatcher/fleet',
+      icon: '▣',
     },
   ];
 
@@ -74,10 +81,6 @@ export default function Sidebar() {
                 <span>{link.icon}</span>
 
                 {link.name}
-
-                {link.name === 'Planning' && (
-                  <small>12</small>
-                )}
               </Link>
             );
           })}
@@ -140,17 +143,14 @@ export default function Sidebar() {
           SYSTEM
         </p>
 
-        <Link
-          href="/settings"
-          className={
-            pathname === '/settings'
-              ? 'sidebar-link active'
-              : 'sidebar-link'
-          }
+        <button
+          type="button"
+          className="sidebar-link sidebar-button"
+          onClick={() => void signOut()}
         >
-          <span>⚙</span>
-          Settings
-        </Link>
+          <span>⏻</span>
+          Sign out
+        </button>
 
       </aside>
 

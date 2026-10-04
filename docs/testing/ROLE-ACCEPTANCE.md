@@ -14,11 +14,21 @@ Use the real FastAPI/PostgreSQL backend; mocked responses do not count. Never re
 | Delivered order -> confirm receipt (retry/double click) | One receipt; `RECEIPT_CONFIRMED` | PASS (Step 3) |
 | Undelivered or failed-stop order | No receipt action | PASS (Step 3) |
 
-## Dispatcher (web, `dispatcher@waypoint.demo`) — deferred (Step 4)
+## Dispatcher (web, `dispatcher@waypoint.demo`)
 
 | Flow | Expected | Result |
 |---|---|---|
-| Login, orders, optimize, publish, live operations, audit | Server data only | NOT RUN (deferred) |
+| Login screen -> `/me` | DISPATCHER, depot from `/fleet`, lands on dashboard | PASS (Step 4, production build, disposable DB) |
+| Wrong password / Store account / sign out + reload | Error shown, no navigation; sign-in after sign-out | PASS (Step 4) |
+| Orders by depot/date/status, server pagination | Store-created orders with server values | PASS (Step 4; pagination beyond 20 orders NOT RUN) |
+| Availability and fuel inputs (ETag / `If-Match` / `If-None-Match`) | 201 create, 200 replace, 412 shows current value; decimal strings | PASS (Step 4) |
+| Create plan -> optimize (synthetic travel, labelled) | Saved revision; served trips, stop sequence, weight/volume; deferrals with server reasons | PASS (Step 4) |
+| Assign demo Driver -> publish revision (double click) | One publication; reload shows the same effective revision; Loader sees trips | PASS (Step 4) |
+| Stale publication / lost response retry | 409 reason shown and reload; retry reuses the request ID (200 replay) | PASS (Step 4) |
+| Overlapping driver trips (422), fuel quota rejection | Server reason shown | NOT RUN |
+| Live operations: loading progress and exceptions, audit log | Server counts, `MISSING` exception with note, audit entries | PASS (Step 4, Loader API events) |
+| Live operations: delivered/failed stops, Store receipts | Server counts and exceptions | NOT RUN (needs a same-day `operations` fixture) |
+| Wrong depot | 403 | PASS (API through the proxy; the UI lists only assigned depots) |
 
 ## Loader (mobile, `loader@waypoint.demo`)
 
