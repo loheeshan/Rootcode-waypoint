@@ -18,5 +18,14 @@ export const deferralReasons = [
 export type DeferralReason = (typeof deferralReasons)[number];
 export const loadStatuses = ['LOADED', 'MISSING', 'DAMAGED'] as const;
 export type LoadStatus = (typeof loadStatuses)[number];
+export const deliveryEventTypes = [
+  'TRIP_STARTED', 'ARRIVED', 'DELIVERED', 'FAILED', 'TRIP_COMPLETED',
+] as const;
+export type DeliveryEventType = (typeof deliveryEventTypes)[number];
+export const deliveryFailureReasons = [
+  'OUTLET_CLOSED', 'RECEIVER_UNAVAILABLE', 'ACCESS_BLOCKED', 'DELIVERY_REFUSED',
+  'VEHICLE_ISSUE', 'OTHER',
+] as const;
+export type DeliveryFailureReason = (typeof deliveryFailureReasons)[number];
 export const syncStatuses = ['PENDING', 'SYNCING', 'SYNCED', 'FAILED'] as const;
 export type SyncStatus = (typeof syncStatuses)[number];

@@ -76,6 +76,25 @@ in the same transaction. Downgrading to `0009_plan_publications` drops both tabl
 and the index but keeps any `LOADING`/`READY` trip and `LOADING` order statuses;
 test rollback only on disposable databases.
 
+### Delivery events and proof of delivery
+
+Migration `0011_delivery_events` preserves all 22 earlier application tables and adds:
+
+| Table / index | Stored fields and constraints |
+|---|---|
+| `proof_of_delivery` | Client UUID `id`; `trip_id`; unique `trip_stop_id`; `receiver_name` (at most 120, not blank); `photo_mime_type` `image/jpeg`/`image/png`; `photo_bytes` (`BYTEA`); `photo_size_bytes` 1 to 1,000,000; `photo_sha256`; `request_hash`; nullable UTC `captured_at`; `uploaded_by`; `uploaded_at`. Composite FK `(trip_stop_id, trip_id)` to `trip_stops`. |
+| `delivery_events` | Client UUID `id`; `trip_id`; nullable `trip_stop_id`; `event_type` `TRIP_STARTED`/`ARRIVED`/`DELIVERED`/`FAILED`/`TRIP_COMPLETED`; `reason_code` and non-blank `note` required only for `FAILED`; `pod_id` required only for `DELIVERED`; positive per-trip `sequence_number`; `request_hash`; nullable UTC `occurred_at`; `recorded_by`; `recorded_at`. Stop events need a stop, trip events must not have one. FKs `(trip_stop_id, trip_id)` to `trip_stops` and `(pod_id, trip_stop_id)` to the same stop's POD. |
+| Partial unique indexes | One `ARRIVED` per stop, one `DELIVERED`/`FAILED` outcome per stop, one `TRIP_STARTED` and one `TRIP_COMPLETED` per trip. |
+| `uq_trip_stops_id_trip`, `uq_proof_of_delivery_id_stop` | Composite FK targets. |
+
+The original sketch linked `proof_of_delivery.delivery_event_id` to an event. Because
+POD must exist before the stop is delivered, the POD references its stop instead and
+the `DELIVERED` event references the POD. All FKs use `RESTRICT`; evidence and events
+are append-only (never updated). Trip, stop and order statuses are updated by the
+delivery service in the same transaction. Downgrading to `0010_load_events` drops both
+tables and the indexes, deleting stored photos, but keeps trip/stop/order statuses;
+test rollback only on disposable databases.
+
 ### Identity
 
 - `users`: UUID primary key, unique lowercase/trimmed nonempty email (up to 320
@@ -507,7 +526,8 @@ created_at
 ### proof_of_delivery
 ```text
 id
-delivery_event_id
+trip_id
+trip_stop_id (replaces delivery_event_id)
 receiver_name
 photo_mime_type
 photo_bytes BYTEA

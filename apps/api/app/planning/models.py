@@ -146,6 +146,7 @@ class TripStop(Base):
     __tablename__ = "trip_stops"
     __table_args__ = (
         Index("uq_trip_stops_id_trip_outlet", "id", "trip_id", "outlet_id", unique=True),
+        Index("uq_trip_stops_id_trip", "id", "trip_id", unique=True),
         UniqueConstraint("trip_id", "sequence_number", name="uq_trip_stops_trip_sequence"),
         UniqueConstraint("trip_id", "outlet_id", name="uq_trip_stops_trip_outlet"),
         CheckConstraint("sequence_number > 0", name="sequence_number_positive"),
