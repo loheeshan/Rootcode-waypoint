@@ -11,7 +11,8 @@
 and `deferral_decisions`. All six models are registered in `app/db/models.py`.
 Dispatcher plan create/list/detail endpoints are implemented with depot scope
 checks. A live compatibility preview checks individual orders against depot
-vehicles. Allocation and publishing services remain separate increments.
+vehicles. `allocation.py` now implements the capacity-only CP-SAT core; the
+optimization API, route feasibility checks and publishing remain pending.
 
 ## Storage decisions
 
@@ -211,6 +212,58 @@ Tests in `test_compatibility.py` exercise the engine's rules/boundaries; API tes
 in `test_compatibility_api.py` check scope, exact-day inputs, status eligibility,
 pagination, the vehicle limit, historical/published reads and absence of writes.
 No migration is added; the current `0007_fleet_operations` head is required.
+
+## Capacity allocation engine
+
+`allocate_capacity(orders, vehicles, time_limit_seconds=5.0)` in `allocation.py`
+accepts frozen compatibility inputs for one complete depot/day. It builds an
+[OR-Tools CP-SAT](https://developers.google.com/optimization/cp/cp_solver) model
+with integer units (kg and cubic metres multiplied by 1,000). It rejects excessive
+precision instead of rounding. Quantities are positive and below 1,000,000,000,
+matching the database's three-decimal limits.
+
+The model assigns each whole order to at most one compatible vehicle/trip slot.
+Each slot enforces **combined** weight and volume. Each vehicle has at most two
+slots; an unused slot is empty. Chilled/reefer, van-only, depot and explicit-day
+availability rules are reused from the compatibility engine. The objective first
+maximizes the number of allocated orders, then minimizes nonempty trips. It does
+not optimize weight, distance, revenue, priority or fairness among tied orders.
+
+The immutable result contains vehicle/trip numbers, sorted order IDs and exact
+load totals, plus every unallocated order ID. Together they cover the input set
+exactly once. Trip numbers are contiguous from 1 for each vehicle; order IDs are
+sorted for stable presentation, **not stop sequence**. These are temporary groups,
+not database Trip IDs. No route or saved revision is created.
+
+`OPTIMAL` means the capacity objective was proven optimal; `FEASIBLE` means a
+capacity solution was found without proving optimality before the search ended.
+Neither means a valid delivery route. `is_complete_plan_validation` is always
+false. Unallocated IDs are not persisted business deferrals, and do not prove
+that a particular order could never be allocated in a different solution.
+No usable solver solution raises `AllocationUnavailable`; UNKNOWN, MODEL_INVALID
+and INFEASIBLE are never converted into an empty successful plan.
+
+Limits are 500 orders, 500 vehicles and 50,000 candidate assignment variables
+(two per compatible order/vehicle pair); oversize inputs raise ValueError without
+truncation. The solver uses one worker, a fixed seed and a five-second default
+search limit; callers may set a positive limit up to 30 seconds. This bounds
+solver search, not total Python/model construction time. Sorted inputs stabilize
+the model; exact tie choices are not guaranteed across package versions or when
+wall-clock limits interrupt search.
+
+This engine has no HTTP endpoint yet and never reads or writes the database.
+The caller must provide complete inputs for a single depot/day. Compatibility
+preview pages must not be used as a complete allocation input. Travel/service
+times, delivery windows, weekly fuel/reservations, existing published trips,
+independent full-plan validation and result persistence remain future work.
+The two-slot rule here applies only to this candidate allocation; publication
+must also check all operational work for that vehicle/day.
+
+`tests/test_allocation.py` checks overloaded days, both capacities, exact decimal
+boundaries, scarce reefer use, empty/no-match inputs, restrictions and failure
+statuses. A separate exhaustive enumerator compares small mixed-day optima and
+independently recomputes capacity, compatibility, trip limits and exact coverage.
+No dependency or migration changes are needed.
 
 ## Apply the migration
 

@@ -42,9 +42,13 @@ one outcome per order/revision. Dispatcher plan create/list/detail now provide
 draft workspaces and saved revision counts. A compatibility preview checks each
 confirmed order against depot vehicles using exact-day availability, temperature,
 van-only access and individual weight/volume limits. Candidate vehicles still
-need route, fuel and combined-load validation. Allocation, full result detail and
-publishing services remain pending; see the [planning guide](apps/api/app/planning/README.md).
-Remaining business endpoints and domain tables, optimization, competition dataset imports, POD capture, offline
+need route, fuel and combined-load validation. The capacity-only CP-SAT engine now
+allocates whole orders within combined weight/volume limits and two trip slots per
+vehicle, with complete allocated/unallocated accounting. It has no HTTP endpoint
+yet and does not validate routes, fuel or published work. Optimization/result APIs
+and publishing remain pending; see the [planning guide](apps/api/app/planning/README.md)
+and [remaining backend batches](docs/process/COMMIT-PLAN.md#backend-delivery-queue-2026-10-04).
+Remaining business endpoints and domain tables, route optimization, competition dataset imports, POD capture, offline
 outbox processing and end-to-end workflows are **not implemented**. Public starter
 pages contain no real data. `scripts/seed.py --demo` delegates to the account seed;
 `scripts/validate-plan.py` remains a placeholder.
