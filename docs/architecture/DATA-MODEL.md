@@ -120,6 +120,21 @@ their own event IDs, so replays still resolve if a receipt is missing. Downgradi
 to `0012_receipt_confirmations` drops only this table; test rollback on disposable
 databases.
 
+### Audit history
+
+Migration `0014_audit_events` preserves all 26 earlier application tables and adds
+`audit_events`: UUID `id`; server `occurred_at`; `actor_id` (authenticated user);
+`action` (eleven allowed values); `entity_type` (`PLAN`/`TRIP`/`STOP`/`ORDER`) and
+`entity_id`; `depot_id`; nullable `trip_id`; `source_id` (the domain record; the
+trip for sync conflicts);
+unique `dedupe_key` (`ACTION:source_id`; sync conflicts use trip, user, type and reason);
+JSON `details`. FKs to users, depots and trips use `RESTRICT`. Indexes:
+`(depot_id, occurred_at)`, `(entity_type, entity_id)`, actor and trip. Rows are
+append-only and written by the publication, loading, delivery, POD and receipt
+services inside the domain transaction; sync conflicts are written after the rolled-back
+attempt. No rows are backfilled. Downgrading to `0013_sync_events` drops the table;
+test rollback only on disposable databases.
+
 ### Identity
 
 - `users`: UUID primary key, unique lowercase/trimmed nonempty email (up to 320

@@ -1,11 +1,13 @@
 import type {
-  DeferralReason, DeliveryEventType, DeliveryFailureReason, LoadStatus, SyncEventType,
-  SyncOutcome, OrderStatus, PlanStatus, Role, StopStatus, TripStatus,
+  AuditAction, AuditEntity, DeferralReason, DeliveryEventType, DeliveryFailureReason, LoadStatus,
+  OperationsExceptionKind, OrderStatus, PlanStatus, Role, StopStatus, SyncEventType, SyncOutcome,
+  TripStatus,
 } from '@waypoint/shared-types';
 
 export type {
   Role, OrderStatus, TripStatus, PlanStatus, StopStatus, AssignmentOutcome, DeferralReason, LoadStatus,
   DeliveryEventType, DeliveryFailureReason, SyncEventType, SyncOutcome, SyncStatus,
+  AuditAction, AuditEntity, OperationsExceptionKind,
 } from '@waypoint/shared-types';
 export interface HealthResponse { status: 'ok'; service: string; version: string }
 export interface LoginRequest { email: string; password: string }
@@ -478,6 +480,85 @@ export interface ReceiptResponse {
   delivered_at: string;
   confirmed_by: string;
   confirmed_at: string;
+}
+export interface LoadingProgress {
+  orders: number;
+  loaded: number;
+  missing: number;
+  damaged: number;
+  pending: number;
+}
+export interface DeliveryProgress {
+  stops_requiring_visit: number;
+  delivered_stops: number;
+  failed_stops: number;
+  open_stops: number;
+  delivered_orders: number;
+  receipts_confirmed: number;
+}
+export interface OperationsTripResponse {
+  trip: LoaderTripResponse;
+  loading: LoadingProgress;
+  delivery: DeliveryProgress;
+}
+export interface OperationsTripListResponse {
+  items: OperationsTripResponse[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+export interface OperationsSummaryResponse {
+  delivery_date: string;
+  depot_ids: string[];
+  draft_plans: number;
+  published_plans: number;
+  trips_by_status: Record<TripStatus, number>;
+  orders_by_status: Record<OrderStatus, number>;
+  loading: LoadingProgress;
+  delivery: DeliveryProgress;
+  deferred_orders: number;
+  receipts_pending: number;
+  exceptions: Record<OperationsExceptionKind, number>;
+}
+export interface OperationsExceptionResponse {
+  kind: OperationsExceptionKind;
+  /** PENDING is outstanding work (a receipt); FAILURE is an actual problem. */
+  severity: 'FAILURE' | 'PENDING';
+  depot_id: string;
+  delivery_date: string;
+  trip_id: string;
+  stop_id: string | null;
+  outlet_id: string | null;
+  order_ids: string[];
+  occurred_at: string;
+  actor_id: string | null;
+  reason_code: string | null;
+  note: string | null;
+  source_id: string;
+}
+export interface OperationsExceptionListResponse {
+  items: OperationsExceptionResponse[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+export interface AuditEventResponse {
+  id: string;
+  occurred_at: string;
+  actor_id: string;
+  action: AuditAction;
+  entity_type: AuditEntity;
+  entity_id: string;
+  depot_id: string;
+  trip_id: string | null;
+  source_id: string;
+  details: Record<string, unknown>;
+}
+export interface AuditListResponse {
+  items: AuditEventResponse[];
+  total: number;
+  limit: number;
+  offset: number;
 }
 export class ApiError extends Error {
   constructor(public readonly status: number, message: string) { super(message); this.name = 'ApiError'; }

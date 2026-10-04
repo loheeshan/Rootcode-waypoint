@@ -12,6 +12,8 @@ from pydantic import ValidationError
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+from app.audit.models import AuditAction, AuditEntity
+from app.audit.service import record_audit
 from app.auth.models import Role, RoleCode, User, UserDepot, UserRole
 from app.fleet.models import Depot
 from app.orders.models import OrderStatus
@@ -373,6 +375,25 @@ def create_publication(
             published_at=now,
             result_snapshot=result.model_dump(mode="json"),
         )
+    )
+    record_audit(
+        session,
+        actor_id=user.id,
+        action=AuditAction.PLAN_PUBLISHED,
+        entity_type=AuditEntity.PLAN,
+        entity_id=plan.id,
+        depot_id=plan.depot_id,
+        trip_id=None,
+        source_id=payload.request_id,
+        occurred_at=now,
+        details={
+            "revision_id": str(revision.id),
+            "revision_number": revision.revision_number,
+            "plan_status": {"from": PlanStatus.DRAFT, "to": PlanStatus.PUBLISHED},
+            "trip_count": len(saved.trips),
+            "served_order_count": len(served),
+            "deferred_order_count": len(saved.deferrals),
+        },
     )
     session.flush()
     session.commit()

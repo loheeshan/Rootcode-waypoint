@@ -12,6 +12,8 @@ from pydantic import BaseModel
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
+from app.audit.models import AuditAction, AuditEntity
+from app.audit.service import record_audit
 from app.auth.models import RoleCode, User
 from app.db.transactions import BeforeCommit, commit_with
 from app.delivery.models import (
@@ -55,6 +57,13 @@ from app.planning.route_inputs import LOCAL_ZONE
 
 SIGNATURES = {PodMimeType.JPEG: b"\xff\xd8\xff", PodMimeType.PNG: b"\x89PNG\r\n\x1a\n"}
 STOP_EVENTS = (DeliveryEventType.ARRIVED, DeliveryEventType.DELIVERED, DeliveryEventType.FAILED)
+AUDIT_ACTIONS = {
+    DeliveryEventType.TRIP_STARTED: AuditAction.TRIP_STARTED,
+    DeliveryEventType.ARRIVED: AuditAction.STOP_ARRIVED,
+    DeliveryEventType.DELIVERED: AuditAction.STOP_DELIVERED,
+    DeliveryEventType.FAILED: AuditAction.STOP_FAILED,
+    DeliveryEventType.TRIP_COMPLETED: AuditAction.TRIP_COMPLETED,
+}
 
 
 def get_delivery_time() -> datetime:
@@ -163,6 +172,8 @@ class _Transition:
             )
             if self.stop is None:
                 raise fail(404, "Stop not found")
+        self.trip_before = self.trip.status
+        self.stop_before = self.stop.status if self.stop is not None else None
         self.fingerprint = _fingerprint(self.trip.id, stop_id, event_type, payload)
         self.existing = session.get(DeliveryEvent, payload.event_id)
         if self.existing is not None and (
@@ -207,6 +218,28 @@ class _Transition:
         self.session.add(event)
         self.session.flush()
         result = _event_response(event, self.trip, self.stop)
+        details: dict[str, Any] = {
+            "sequence_number": sequence,
+            "trip_status": {"from": self.trip_before, "to": self.trip.status},
+        }
+        if self.stop is not None:
+            details["stop_status"] = {"from": self.stop_before, "to": self.stop.status}
+        if event.reason_code is not None:
+            details["reason_code"] = event.reason_code
+        if event.pod_id is not None:
+            details["pod_id"] = str(event.pod_id)
+        record_audit(
+            self.session,
+            actor_id=self.user.id,
+            action=AUDIT_ACTIONS[self.event_type],
+            entity_type=AuditEntity.STOP if self.stop is not None else AuditEntity.TRIP,
+            entity_id=self.stop.id if self.stop is not None else self.trip.id,
+            depot_id=self.plan.depot_id,
+            trip_id=self.trip.id,
+            source_id=event.id,
+            occurred_at=self.now,
+            details=details,
+        )
         commit_with(self.session, result, self.before_commit)
         return result
 
@@ -381,7 +414,7 @@ def upload_pod(
     payload: PodUploadRequest,
     now: datetime,
 ) -> tuple[PodResponse, bool]:
-    trip, _, _ = _driver_trip(session, user, trip_id, lock=True)
+    trip, plan, _ = _driver_trip(session, user, trip_id, lock=True)
     stop = session.scalar(
         select(TripStop)
         .where(TripStop.id == stop_id, TripStop.trip_id == trip.id)
@@ -437,6 +470,23 @@ def upload_pod(
     session.add(pod)
     session.flush()
     result = _pod_response(pod)
+    # Metadata only: never the photo bytes or the receiver's name.
+    record_audit(
+        session,
+        actor_id=user.id,
+        action=AuditAction.POD_UPLOADED,
+        entity_type=AuditEntity.STOP,
+        entity_id=stop.id,
+        depot_id=plan.depot_id,
+        trip_id=trip.id,
+        source_id=pod.id,
+        occurred_at=now,
+        details={
+            "pod_id": str(pod.id),
+            "photo_mime_type": pod.photo_mime_type,
+            "photo_size_bytes": pod.photo_size_bytes,
+        },
+    )
     session.commit()
     return result, True
 
