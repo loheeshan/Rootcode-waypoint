@@ -9,9 +9,13 @@ from sqlalchemy.orm import Session
 from app.auth.dependencies import require_roles
 from app.auth.models import RoleCode, User
 from app.db.session import get_session
+from app.planning.allocation import AllocationUnavailable
 from app.planning.compatibility_schemas import PlanCompatibilityResponse
 from app.planning.compatibility_service import preview_compatibility
 from app.planning.models import PlanStatus
+from app.planning.optimization_schemas import OptimizationResponse, OptimizeRequest
+from app.planning.optimization_service import create_optimization, get_optimization
+from app.planning.routing import RouteSearchUnavailable
 from app.planning.schemas import PlanCreateRequest, PlanDetailResponse, PlanListResponse
 from app.planning.service import (
     create_plan,
@@ -20,10 +24,78 @@ from app.planning.service import (
     get_planning_time,
     list_plans,
 )
+from app.planning.validation import PlanningValidationError
 
 router = APIRouter(prefix="/plans", tags=["plans"])
 DispatcherUser = Annotated[User, Depends(require_roles(RoleCode.DISPATCHER))]
 Database = Annotated[Session, Depends(get_session)]
+
+
+@router.post(
+    "/{plan_id}/optimize",
+    response_model=OptimizationResponse,
+    status_code=201,
+    responses={200: {"model": OptimizationResponse, "description": "Saved request replay"}},
+)
+def post_optimization(
+    plan_id: UUID,
+    payload: OptimizeRequest,
+    response: Response,
+    user: DispatcherUser,
+    session: Database,
+    now: Annotated[datetime, Depends(get_planning_time)],
+) -> OptimizationResponse:
+    try:
+        result, created = create_optimization(session, user, plan_id, payload, now)
+    except HTTPException:
+        session.rollback()
+        raise
+    except IntegrityError:
+        session.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Optimization conflict; reload or retry the same request",
+            headers={"Cache-Control": "no-store"},
+        ) from None
+    except ValueError:
+        session.rollback()
+        raise HTTPException(
+            status_code=422,
+            detail="Invalid or incomplete route planning inputs",
+            headers={"Cache-Control": "no-store"},
+        ) from None
+    except (
+        SQLAlchemyError,
+        AllocationUnavailable,
+        RouteSearchUnavailable,
+        PlanningValidationError,
+    ):
+        session.rollback()
+        raise HTTPException(
+            status_code=503,
+            detail="Optimization unavailable; retry with the same request ID",
+            headers={"Cache-Control": "no-store"},
+        ) from None
+    response.status_code = 201 if created else 200
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Location"] = f"/api/v1/plans/{plan_id}/revisions/{result.revision_id}/results"
+    return result
+
+
+@router.get("/{plan_id}/revisions/{revision_id}/results", response_model=OptimizationResponse)
+def get_optimization_result(
+    plan_id: UUID, revision_id: UUID, response: Response, user: DispatcherUser, session: Database
+) -> OptimizationResponse:
+    try:
+        result = get_optimization(session, user, plan_id, revision_id)
+    except (SQLAlchemyError, ValueError):
+        raise HTTPException(
+            status_code=503,
+            detail="Optimization results unavailable",
+            headers={"Cache-Control": "no-store"},
+        ) from None
+    response.headers["Cache-Control"] = "no-store"
+    return result
 
 
 def unavailable() -> HTTPException:
@@ -121,7 +193,10 @@ def get_plan_compatibility(
     try:
         result = preview_compatibility(session, user, plan_id, limit=limit, offset=offset)
     except SQLAlchemyError:
-        raise HTTPException(status_code=503, detail="Compatibility preview unavailable",
-                            headers={"Cache-Control": "no-store"}) from None
+        raise HTTPException(
+            status_code=503,
+            detail="Compatibility preview unavailable",
+            headers={"Cache-Control": "no-store"},
+        ) from None
     response.headers["Cache-Control"] = "no-store"
     return result

@@ -611,9 +611,9 @@ def test_planning_clock_requires_timezone_metadata(engine, depots, users):
         )
 
 
-def test_openapi_declares_auth_and_does_not_expose_optimizer_or_publisher(client):
+def test_openapi_declares_auth_and_does_not_expose_publisher(client):
     paths = client.get("/openapi.json").json()["paths"]
     for path, method in ((BASE, "post"), (BASE, "get"), (f"{BASE}/{{plan_id}}", "get")):
         assert paths[path][method]["security"] == [{"HTTPBearer": []}]
-    assert f"{BASE}/{{plan_id}}/optimize" not in paths
+    assert paths[f"{BASE}/{{plan_id}}/optimize"]["post"]["security"] == [{"HTTPBearer": []}]
     assert f"{BASE}/{{plan_id}}/publish" not in paths

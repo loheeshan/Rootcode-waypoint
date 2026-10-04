@@ -1,4 +1,4 @@
-import type { OrderStatus, PlanStatus, Role } from '@waypoint/shared-types';
+import type { DeferralReason, OrderStatus, PlanStatus, Role } from '@waypoint/shared-types';
 
 export type {
   Role, OrderStatus, TripStatus, PlanStatus, StopStatus, AssignmentOutcome, DeferralReason, SyncStatus,
@@ -162,6 +162,64 @@ export interface PlanCompatibilityResponse {
   total: number;
   limit: number;
   offset: number;
+}
+export interface OptimizeRequest {
+  request_id: string;
+  source: string;
+  is_synthetic: boolean;
+  services: { outlet_id: string; service_seconds: number }[];
+  shifts: {
+    vehicle_id: string;
+    earliest_departure: string;
+    latest_return: string;
+    turnaround_seconds: number;
+  }[];
+  legs: {
+    from_outlet_id: string | null;
+    to_outlet_id: string | null;
+    distance_km: string;
+    travel_seconds: number;
+  }[];
+}
+export interface SavedStopResponse {
+  id: string;
+  outlet_id: string;
+  sequence_number: number;
+  order_ids: string[];
+  arrival_at: string;
+  service_start_at: string;
+  departure_at: string;
+}
+export interface SavedTripResponse {
+  id: string;
+  vehicle_id: string;
+  trip_number: number;
+  departure_at: string;
+  return_at: string;
+  distance_km: string;
+  fuel_l: string;
+  stops: SavedStopResponse[];
+}
+export interface DeferredOrderResponse {
+  order_id: string;
+  outlet_id: string;
+  reason_code: DeferralReason;
+  reason_text: string;
+}
+export interface OptimizationResponse {
+  request_id: string;
+  plan_id: string;
+  revision_id: string;
+  revision_number: number;
+  created_at: string;
+  source: string;
+  is_synthetic: boolean;
+  validation: 'VALIDATED_SNAPSHOT';
+  publishable: false;
+  algorithm: 'capacity_then_bounded_insertion';
+  eligible_order_count: number;
+  trips: SavedTripResponse[];
+  deferrals: DeferredOrderResponse[];
 }
 export class ApiError extends Error {
   constructor(public readonly status: number, message: string) { super(message); this.name = 'ApiError'; }
