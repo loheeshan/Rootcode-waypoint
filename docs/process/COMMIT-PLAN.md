@@ -6,35 +6,33 @@ This is the current implementation queue; the original feature lists below also
 include completed work and frontend tasks. Use one reviewable commit per batch,
 with `feature/` branches. The user commits and pushes after reviewing each batch.
 
-**Current batch:** route input JSON import and fixed-group scheduling: directed
-travel distances/times, full service within outlet windows, return/turnaround
-between trips and supplied consumed/reserved weekly fuel balances. Includes
-explicitly approved synthetic demo inputs. Internal engine and tests only; no
-optimization HTTP endpoint, saved allocation or published plan is added here.
+**Current batch:** Dispatcher optimization/result APIs, scoped complete database
+inputs, bounded repair/reallocation, independent snapshot validation, full order
+outcomes, atomic draft revision persistence and idempotent request replay. Includes
+shared frontend contracts. Publishing and authoritative reservations remain separate.
 
-**Eight backend batches remain after this commit:**
+**Seven backend batches remain after this commit:**
 
 | Next | Suggested branch | Commit scope / completion check |
 |---|---|---|
-| 1 | `feature/planning-optimize-api` | Scoped complete master/travel/fuel input loading, missing-data errors, repair/reallocation of infeasible capacity groups; independent full-plan validator; complete served/deferred explanations; atomic draft result persistence; optimize/detail APIs and frontend contracts. |
-| 2 | `feature/planning-publish` | Publish one effective immutable revision; scoped active Driver assignments; authoritative reservation storage/balances; lock/revalidate operational trip limits and weekly fuel; order transitions and conflict tests. |
-| 3 | `feature/loader-workflow` | Loading/event storage and scoped trip/loading APIs; shortfall/damage records; guarded loading-to-ready transition. |
-| 4 | `feature/driver-delivery` | Assigned-trip/stop reads, guarded start/delivery/failure transitions; proof-of-delivery upload/read stored in PostgreSQL with authorization and size/type limits. |
-| 5 | `feature/store-receipts` | Receipt storage; outlet-scoped receipt confirmation on delivered orders; duplicate protection and receipt status propagation. |
-| 6 | `feature/offline-sync` | Idempotent event ingestion and persisted sync receipts; replay/conflict rules for Driver/Loader events; restart/retry/reconnect server tests. Mobile SQLite/outbox UI remains client work. |
-| 7 | `feature/dispatcher-operations` | Depot-scoped live operation summaries, loading/delivery/receipt exceptions and persistent audit history. |
-| 8 | `feature/backend-integration` | Complete synthetic operational seed data, Store-to-Dispatcher-to-Loader-to-Driver-to-Store API integration tests, contract verification and frontend connection walkthrough. |
+| 1 | `feature/planning-publish` | Publish one effective immutable revision; scoped active Driver assignments; authoritative reservation storage/balances; lock/revalidate operational trip limits and weekly fuel; order transitions and conflict tests. |
+| 2 | `feature/loader-workflow` | Loading/event storage and scoped trip/loading APIs; shortfall/damage records; guarded loading-to-ready transition. |
+| 3 | `feature/driver-delivery` | Assigned-trip/stop reads, guarded start/delivery/failure transitions; proof-of-delivery upload/read stored in PostgreSQL with authorization and size/type limits. |
+| 4 | `feature/store-receipts` | Receipt storage; outlet-scoped receipt confirmation on delivered orders; duplicate protection and receipt status propagation. |
+| 5 | `feature/offline-sync` | Idempotent event ingestion and persisted sync receipts; replay/conflict rules for Driver/Loader events; restart/retry/reconnect server tests. Mobile SQLite/outbox UI remains client work. |
+| 6 | `feature/dispatcher-operations` | Depot-scoped live operation summaries, loading/delivery/receipt exceptions and persistent audit history. |
+| 7 | `feature/backend-integration` | Complete synthetic operational seed data, Store-to-Dispatcher-to-Loader-to-Driver-to-Store API integration tests, contract verification and frontend connection walkthrough. |
 
 These are planned batches, not a guaranteed fixed count; integration findings may
 require fixes. The user approved clearly labelled synthetic route data, now included
 as `data/seed/route-inputs.synthetic.json`. Real road data remains unavailable;
 the demo snapshot is not automatically mapped to database IDs or used for publication.
-The optimization service must load the whole eligible depot/day input set, not
-pages from the compatibility preview, and revalidate before publishing.
+The optimization service loads the whole eligible depot/day input set; publishing
+must reload and revalidate it against current operational work and reservations.
 
 Frontend connection can start now with auth, Store orders, Dispatcher orders,
-fleet inputs, plan workspace and compatibility contracts. Saved allocations,
-publishing, loading, delivery, receipts and sync need the batches above. Finishing
+fleet inputs, plan workspace, compatibility and saved optimization contracts.
+Publishing, loading, delivery, receipts and sync need the batches above. Finishing
 these backend batches does not itself implement or connect every frontend screen.
 
 ## Repository foundation

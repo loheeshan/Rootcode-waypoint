@@ -13,7 +13,8 @@ Dispatcher plan create/list/detail endpoints are implemented with depot scope
 checks. A live compatibility preview checks individual orders against depot
 vehicles. `allocation.py` implements the capacity-only CP-SAT core; `routing.py`
 sequences fixed groups against imported travel, window and fuel inputs. The
-optimization API, independent full-plan validation and publishing remain pending.
+optimization API now loads scoped inputs, independently validates a draft and saves
+its revision/results atomically. Publishing remains pending.
 
 ## Storage decisions
 
@@ -212,7 +213,7 @@ counts remain unchanged. The frontend DTOs and full shape are in the
 Tests in `test_compatibility.py` exercise the engine's rules/boundaries; API tests
 in `test_compatibility_api.py` check scope, exact-day inputs, status eligibility,
 pagination, the vehicle limit, historical/published reads and absence of writes.
-No migration is added; the current `0007_fleet_operations` head is required.
+The preview requires at least migration `0007_fleet_operations`; it adds no table of its own.
 
 ## Capacity allocation engine
 
@@ -252,12 +253,13 @@ solver search, not total Python/model construction time. Sorted inputs stabilize
 the model; exact tie choices are not guaranteed across package versions or when
 wall-clock limits interrupt search.
 
-This engine has no HTTP endpoint yet and never reads or writes the database.
+The optimization API uses this engine; the engine itself never reads or writes the database.
 The caller must provide complete inputs for a single depot/day. Compatibility
 preview pages must not be used as a complete allocation input. Travel/service
 times, delivery windows and supplied weekly fuel balances are checked by the
 separate scheduler below. Existing published work, authoritative reservation
-loading, independent full-plan validation and result persistence remain future work.
+loading and operational publication checks remain future work. The API below adds
+independent snapshot validation and result persistence.
 The two-slot rule here applies only to this candidate allocation; publication
 must also check all operational work for that vehicle/day.
 
@@ -340,14 +342,14 @@ minimum distance. `INFEASIBLE` returns no trips and every grouped order under
 list is a stored business deferral. Missing inputs raise `RouteInputError`; UNKNOWN
 or MODEL_INVALID raises `RouteSearchUnavailable`, never an infeasibility verdict.
 
-**The future optimizer must repair or reallocate infeasible capacity groups.**
+**The optimizer repairs or reallocates infeasible capacity groups before deferral.**
 The capacity solver's trip-minimization objective can pack orders together that
 need separate trips to satisfy windows. Failure here does not prove the orders
 cannot be served in another allocation. The scheduler also trusts the earlier
 capacity/compatibility stage and the supplied snapshot; it is not the independent
 full-plan validator. Every result keeps `is_complete_plan_validation: false`.
-There is no optimize endpoint, saved revision, driver assignment, operational
-trip ledger check or publication in this increment.
+The API below orchestrates this engine and saves independently checked drafts.
+Driver assignment, operational trip ledger checks and publishing remain pending.
 
 Limits: 10 MB import, 500 orders/outlets/vehicles, 50,000 input legs, 25 unique
 outlet stops per trip, 20,000 solver arcs. Oversize inputs fail without truncation.
@@ -363,6 +365,49 @@ and covers missing/invalid data, infeasible groups, overnight restrictions, fuel
 rounding, numeric limits, solver statuses and the approved synthetic example.
 No migration, dependency or HTTP/shared-TypeScript contract changes are needed.
 
+## Optimization API and draft persistence
+
+`POST /api/v1/plans/{plan_id}/optimize` and
+`GET /api/v1/plans/{plan_id}/revisions/{revision_id}/results` now expose the planning
+pipeline to the frontend. See the [request/response contract](../../../../docs/architecture/API-CONTRACTS.md#draft-optimization-and-saved-results)
+for the exact fields, missing-data handling and retry rules.
+
+`optimization_service.py` loads the complete confirmed order set and depot fleet
+from the database. Request inputs contain only explicitly sourced travel legs,
+service duration and shifts. Current master capacities, temperature/access rules,
+outlet windows, day availability and recorded fuel totals come from the database.
+Missing availability or consumed-fuel history blocks the run. A future week has
+zero consumption to date; published vehicle work blocks optimization until the
+next reservation-accounting increment can provide an authoritative balance.
+
+`optimizer.py` first tries the capacity allocation and route schedule. If that
+does not serve all orders, it rebuilds groups using bounded insertion, trying
+compatible vehicles, existing groups and unused trip slots. It can split groups
+or choose another vehicle. It does not exhaustively backtrack earlier decisions.
+Local placement failures have explicit reasons and do not claim global infeasibility.
+Fuel relaxation is diagnostic only and never supplies a returned/saved route.
+Timeouts/search limits fail the request without saving a partial result.
+
+`validation.py` independently recalculates coverage, compatibility, aggregate loads,
+directed travel/service windows, departure dates, availability, return/turnaround,
+two-trip limits and per-vehicle rounded fuel. It does not call the scheduler's
+constraint-building or reconstruction helpers. Only a validated snapshot is saved.
+
+Each new request UUID appends a numbered draft revision, trip/stop rows, served
+assignments, explained deferrals and a `PlanOptimization` input/result snapshot in
+one transaction. Same-key/same-payload retries return the original saved result;
+different payloads under a used key return 409. PostgreSQL plan/depot/fleet locks
+serialize optimization and fleet input writes; the saved snapshot is historical,
+not a guarantee that no later order or master-data change exists. Live order states
+and fuel are unchanged. `publishable` remains false until publication revalidates
+against live work/reservations. Synthetic provenance remains visible in results.
+
+Run the HTTP tests in `tests/test_optimization_api.py` and independent engine tests
+in `tests/test_optimizer.py`. The PostgreSQL-specific concurrent replay/new-key
+tests skip under SQLite; verify them against a disposable PostgreSQL database.
+The new JSON/replay table is registered in `app/db/models.py`; migration `0008`
+adds no demo records or credentials and preserves existing planning rows.
+
 ## Apply the migration
 
 From `D:\Rootcode` after committing the increment:
@@ -374,13 +419,14 @@ docker compose exec api alembic current
 docker compose exec api alembic check
 ```
 
-Expected head: `0007_fleet_operations`. It adds empty daily availability/fuel
+Expected head: `0008_plan_optimizations`. It adds empty optimization snapshot/replay
+storage and preserves all 17 earlier application tables. Migration `0007` added daily availability/fuel
 tables and preserves all 15 earlier tables. See the
 [fleet input guide](../fleet/README.md#daily-operational-inputs) for their rules.
 Migration `0006` created two outcome tables and three supporting parent indexes;
 `0005` created the four planning foundation tables. None of these migrations
 inserts planning data, availability or fuel usage. Demo seeds keep their previous
-behavior. Daily input storage is not yet connected to allocation or publishing.
+behavior. Daily inputs now feed optimization; publication remains pending.
 
 Local Python, from `apps/api`: `uv sync --frozen`, then `uv run alembic upgrade head`.
 Run `uv run ruff check .`, `uv run mypy app` and `uv run pytest -q` for backend checks.

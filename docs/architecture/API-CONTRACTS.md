@@ -4,19 +4,21 @@
 
 Authentication, Store order create/list/detail, Dispatcher order listing, fleet
 reads, daily fleet input GET/PUT, and plan create/list/detail routes are implemented. Store receipt,
-optimization, publishing, live operations, Loader and Driver routes remain planned.
+publishing, live operations, Loader and Driver routes remain planned.
 A live, read-only plan compatibility preview is implemented for individual
 order/vehicle rules; it is not full feasibility validation or optimization.
 Internal capacity allocation and fixed-group route scheduling engines are also
 implemented, with validated JSON route input import and a synthetic example.
-They add no HTTP endpoints or shared TypeScript DTOs. Route results are not saved,
-independently validated or publishable; the future optimize API must load scoped
-inputs and repair/reallocate infeasible groups before generating business deferrals.
+The optimize API now orchestrates these engines with scoped database inputs,
+bounded repair/reallocation, independent snapshot validation and atomic saved draft
+results. New TypeScript DTOs are provided. Publishing remains a separate increment.
 Migration `0005_planning_foundation` adds storage for plans, revisions, trips and
-stops. Plan workspace APIs now use this storage; allocation persistence/publishing remain pending.
+stops. Plan workspace and optimization APIs now use this storage; publishing remains pending.
 Migration `0006_plan_outcomes` adds order result and deferral reason storage,
 without new routes or changes to existing order JSON/status behavior.
 Migration `0007_fleet_operations` adds daily availability and fuel-usage storage.
+Migration `0008_plan_optimizations` adds request replay keys and immutable-by-service
+input/result snapshots for each optimized revision.
 Separate daily-input routes now use this storage; the fleet list still returns
 only master data. Daily writes require conditional headers described below.
 The API also exposes `GET /health`,
@@ -320,8 +322,8 @@ Order read failures return `{"detail":"Orders unavailable"}`; fleet failures
 return `{"detail":"Fleet unavailable"}`, without SQL/connection details.
 The new shared types are `DepotResponse`, `OutletResponse`, `VehicleResponse`,
 `FleetListResponse`, `DispatcherOrderResponse` and `DispatcherOrderListResponse`.
-The read APIs need no additional migration. Optimization, publishing, live
-operations and frontend screen integration remain future increments.
+The read APIs need no additional migration. Draft optimization is documented below;
+publishing, live operations and frontend screen integration remain future increments.
 
 ### Daily fleet inputs
 
@@ -503,8 +505,10 @@ without a reason. Separate aggregates prevent trips from multiplying outcome
 counts. These are **not** a feasibility check or proof that all selected orders
 are covered. The endpoint does not select an effective published revision or
 return full trip/stop/order results. Timestamps are UTC; `published_at` is nullable.
-Optimization, result details, revision creation/editing and publishing are later
-increments. A `PUBLISHED` value read from storage is not a new validation verdict.
+Optimization creates draft revisions and exposes saved result details through
+the optimization endpoints documented below. Publishing and manual revision
+editing remain later increments. A `PUBLISHED` value read from storage is not
+a new validation verdict.
 
 All successful responses and 404/409/503 errors use `Cache-Control: no-store`.
 
@@ -609,6 +613,121 @@ Shared exports: `CompatibilityIssue`, `VehicleExclusionResponse`,
 `OrderCompatibilityResponse`, `CompatibilityVehicleResponse`, `PlanCompatibilityResponse`.
 This increment adds no migration; apply `0007_fleet_operations` for availability.
 
+## Draft optimization and saved results
+
+```text
+POST /api/v1/plans/{plan_id}/optimize
+GET  /api/v1/plans/{plan_id}/revisions/{revision_id}/results
+```
+
+Both require active Dispatcher authentication and current plan depot access.
+Foreign/missing plan IDs return 404. The POST accepts:
+
+```json
+{
+  "request_id": "<new UUID for this run; preserve for retries>",
+  "source": "Synthetic demo travel matrix",
+  "is_synthetic": true,
+  "services": [{"outlet_id":"<eligible outlet UUID>","service_seconds":600}],
+  "shifts": [{
+    "vehicle_id":"<available vehicle UUID>",
+    "earliest_departure":"2026-10-05T07:30:00+05:30",
+    "latest_return":"2026-10-05T18:00:00+05:30",
+    "turnaround_seconds":900
+  }],
+  "legs": [
+    {"from_outlet_id":null,"to_outlet_id":"<outlet UUID>","distance_km":"5.000","travel_seconds":900},
+    {"from_outlet_id":"<outlet UUID>","to_outlet_id":null,"distance_km":"6.000","travel_seconds":1000}
+  ]
+}
+```
+
+Dates/IDs above are illustrative. Use the selected plan's date and live IDs, not
+IDs from the standalone routing fixture. Each eligible outlet needs one service
+entry. Each explicitly available depot vehicle needs one shift. Include every
+directed pair among eligible outlets and the depot, without self legs; reverse
+journeys are separate and null means depot. An empty eligible day uses empty
+services/shifts/legs. Extra fields, duplicates and foreign/unknown resource inputs
+are rejected. Source is required, at most 200 characters; synthetic must be boolean.
+Travel and scheduling numeric/time limits match the internal route input format.
+
+The server loads **all CONFIRMED orders** for the accepted plan date/depot. Clients
+cannot submit selected order IDs, capacities, windows, availability, quotas or fuel
+totals. Record plan-day availability for every depot vehicle first. For available
+vehicles, daily consumed-fuel records are required for every day from Monday through
+today within the plan week, including explicit zeros. A wholly future week has
+zero consumption to date. Future reservations are not assumed zero when published
+work exists: this version rejects that case with 409 until publication/reservation
+accounting is implemented. Shifts cannot start before the request's server clock.
+Unknown data produces 422, not invented deferrals. Past plans and new runs on
+published plans are rejected; earlier successful retries still replay.
+
+Success creates a **new draft revision** (normally revision 2 after empty workspace
+revision 1), without replacing older results. Response includes:
+
+- `request_id`, `plan_id`, `revision_id`, `revision_number`, `created_at`.
+- `source`, `is_synthetic`, `eligible_order_count`.
+- `validation: "VALIDATED_SNAPSHOT"`, `publishable: false`,
+  `algorithm: "capacity_then_bounded_insertion"`.
+- `trips`: saved trip `id`, `vehicle_id`, chronological `trip_number`, timezone-aware
+  departure/return timestamps, three-decimal distance/fuel strings and ordered stops.
+- Each stop has saved `id`, `outlet_id`, `sequence_number`, `order_ids`, actual
+  `arrival_at`, `service_start_at` (after waiting) and `departure_at`.
+- `deferrals`: `order_id`, `outlet_id`, `reason_code`, `reason_text` for every
+  unserved order. Every eligible order is served or deferred exactly once.
+
+The independent validator recomputes compatibility, weight/volume, stop travel and
+service windows, day availability, return/turnaround, two trips and weekly fuel,
+and exact order coverage against the saved input snapshot. This does not validate
+future live changes or operational reservations and is not permission to publish.
+The bounded insertion fallback is a heuristic, not a global optimality guarantee.
+Deferral text states the local-placement limitation; another allocation may differ.
+No live order status, availability, consumed fuel, driver assignment or publication
+state changes. Successful responses carry `Cache-Control: no-store` and a Location
+pointing to the saved GET endpoint. GET returns the original result even after
+live inputs change; it does not rerun the optimizer or show current trip execution.
+
+| Status | Meaning |
+|---|---|
+| 201 | First successful run: all revision, route, assignment, reason and snapshot rows committed together. |
+| 200 | Same request UUID and validated payload replay the original saved response. |
+| 401 / 403 | Missing/inactive authentication / missing Dispatcher role. |
+| 404 | Inaccessible/missing plan, or requested revision has no optimization result. |
+| 409 | Key reused with different inputs/another plan, publication conflict, or insert conflict. |
+| 422 | Missing/invalid inputs, incompatible calendar, past departure/date, or size limit. |
+| 503 | Database/solver unavailable, search budget exhausted, or independent validation failed. Retry with the same request ID. |
+
+Failed transactions are rolled back where possible. A lost database commit
+acknowledgement can leave an uncertain outcome; same-key replay recovers that result.
+Request IDs are globally unique. Preserve the exact payload/key after an uncertain
+network outcome; retrying it cannot create a second revision. A deliberate new run
+uses a new key and reloads current inputs. PostgreSQL locks the scoped plan, then
+the depot, followed by orders/outlets and sorted fleet rows through commit. Same
+plan requests serialize revision numbering; different plan dates in a depot also
+serialize to avoid shared-outlet lock ordering conflicts. Fleet-input writes share
+the vehicle locks. SQLite does not provide this concurrency guarantee. Serialization
+does not prevent every unrelated insert/grant change, so publication must reload
+the current eligible order set and revalidate. Other database deadlocks return the
+sanitized 503; retry the same key after the conflict clears.
+
+Limits: 100 eligible orders, 20 depot vehicles, 100 service entries, 20 shifts,
+10,100 legs; route groups still permit at most 25 outlet visits and 20,000 arcs.
+Search uses a 20-second elapsed budget checked between calls and at most 128 route
+evaluations, with up to three seconds for initial capacity and two per route call.
+Model construction/validation/database time can add latency. An exhausted search
+returns 503 with no new revision rather than inventing unexplored deferrals.
+
+Shared exports: `OptimizeRequest`, `OptimizationResponse`, `SavedTripResponse`,
+`SavedStopResponse`, `DeferredOrderResponse`. Frontend example:
+
+```typescript
+const saved = await api.requestWithMetadata<OptimizationResponse>(
+  `/plans/${planId}/optimize`, { method: 'POST', body: JSON.stringify(request) }
+);
+// Keep request.request_id and request unchanged while retrying.
+// Display saved.data.trips and saved.data.deferrals, including synthetic provenance.
+```
+
 ## Loader
 
 ```text
@@ -674,8 +793,8 @@ package. `SERVED` means assigned to a stop in a revision, not delivered. Reason
 codes are `NO_COMPATIBLE_VEHICLE`, `REEFER_CAPACITY_EXHAUSTED`,
 `VAN_CAPACITY_EXHAUSTED`, `WEIGHT_CAPACITY`, `VOLUME_CAPACITY`, `TIME_WINDOW`,
 `FUEL_QUOTA`, `VEHICLE_UNAVAILABLE`, `TRIP_LIMIT`. These are storage contracts;
-optimization, complete outcome coverage, reason generation and publishing
-validation remain pending.
+draft optimization now writes complete outcomes and reasons; publication validation
+against current operational work remains pending.
 
 Sync:
 ```text

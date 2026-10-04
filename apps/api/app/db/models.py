@@ -7,9 +7,10 @@ from app.fleet.operations_models import VehicleAvailability, VehicleFuelUsage
 from app.orders.models import Order
 from app.planning.assignment_models import DeferralDecision, PlanAssignment
 from app.planning.models import Plan, PlanRevision, Trip, TripStop
+from app.planning.optimization_models import PlanOptimization
 
 __all__ = [
     "Base", "DeferralDecision", "Depot", "Order", "Outlet", "Plan", "PlanAssignment",
-    "PlanRevision", "Role", "Trip", "TripStop", "User",
+    "PlanOptimization", "PlanRevision", "Role", "Trip", "TripStop", "User",
     "UserDepot", "UserOutlet", "UserRole", "Vehicle", "VehicleAvailability", "VehicleFuelUsage",
 ]

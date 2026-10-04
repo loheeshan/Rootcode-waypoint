@@ -15,6 +15,29 @@ Migration `0007_fleet_operations` adds empty `vehicle_availability` and
 `vehicle_fuel_usage` tables, preserving all 15 earlier tables and records.
 The other tables in the core table list remain planned.
 
+### Optimization snapshots
+
+Migration `0008_plan_optimizations` adds the empty `plan_optimizations` table,
+preserving all 17 earlier application tables and records. `request_id` is a
+globally unique UUID primary key. `plan_revision_id` is unique, required and
+references `plan_revisions.id` with RESTRICT. `request_hash` is a required 64-character
+SHA-256 string of the validated request. Required JSON `input_snapshot` stores
+the scoped order/fleet master inputs and canonical route inputs; `result_snapshot`
+stores the typed API response, including created time, provenance, route IDs,
+schedule and deferrals. Numeric inputs retain decimal strings.
+
+The service appends snapshots and canonical route/assignment rows in one transaction.
+It never updates an earlier optimized revision. Immutability is enforced by the
+service, not a database trigger. A snapshot cannot survive deletion of its referenced
+revision; RESTRICT prevents that deletion until the snapshot is explicitly removed.
+Its copied JSON IDs are historical data, not additional foreign keys; canonical
+trip/stop/assignment rows remain the relational references.
+
+Downgrading to `0007_fleet_operations` removes replay keys and snapshots but retains
+the revisions, routes and outcomes. This loses retry protection and historical
+input evidence, so rollback testing must use a disposable database. Publication,
+driver assignment and authoritative fuel reservation storage remain pending.
+
 ### Identity
 
 - `users`: UUID primary key, unique lowercase/trimmed nonempty email (up to 320
