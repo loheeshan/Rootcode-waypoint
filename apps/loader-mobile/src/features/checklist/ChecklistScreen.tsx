@@ -2,14 +2,15 @@ import { useRouter } from 'expo-router';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ActionButton, Notice } from '../../components/ui/ScreenKit';
+import { AttentionList, DiscardButtons } from '../../sync/SyncBanner';
 import { t } from '../../theme/loaderTokens';
 import { useLoading } from '../loading/LoadingProvider';
-import { LOAD_LABEL, TRIP_LABEL, canLoad, colomboTime, shortId } from '../loading/format';
+import { LOAD_LABEL, TRIP_LABEL, colomboTime, shortId } from '../loading/format';
 
 /** Stop-sequenced manifest for the selected trip; each whole order is marked once loaded. */
 export default function ChecklistScreen() {
   const router = useRouter();
-  const { tripId, view, loading, error, busy, refresh, record } = useLoading();
+  const { tripId, view, loading, error, busy, refresh, record, editable, offline, fetchedAt, attention, unsent, ready, discard } = useLoading();
 
   if (!tripId) {
     return (
@@ -21,7 +22,6 @@ export default function ChecklistScreen() {
     );
   }
 
-  const editable = view ? canLoad(view.trip.status) : false;
   // Load the last stop first so the first delivery is nearest the door.
   const stops = view ? [...view.stops].sort((a, b) => b.sequence_number - a.sequence_number) : [];
 
@@ -32,7 +32,11 @@ export default function ChecklistScreen() {
       refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} />}
     >
       <Text style={styles.title}>Loading checklist</Text>
-      {error ? <Notice tone="red" title="Not saved">{error}</Notice> : null}
+      {offline && view ? (
+        <Notice tone="amber" title="Offline">
+          Showing the copy saved {fetchedAt ? `at ${colomboTime(fetchedAt)}` : 'on this phone'}. Changes are saved on this phone and sent when you are back online.
+        </Notice>
+      ) : error ? <Notice tone="red" title="Not refreshed">{error}</Notice> : null}
       {!view && loading ? <Text style={styles.muted}>Loading trip…</Text> : null}
       {view ? (
         <>
@@ -47,7 +51,14 @@ export default function ChecklistScreen() {
               {view.loaded_count} loaded · {view.missing_count} missing · {view.damaged_count} damaged · {view.pending_count} to check
             </Text>
           </View>
-          {!editable ? (
+          {unsent ? (
+            <Notice tone="blue" title={`${unsent} change${unsent === 1 ? '' : 's'} saved on this phone`}>Waiting to be confirmed by the server.</Notice>
+          ) : null}
+          <AttentionList events={attention} />
+          <DiscardButtons events={attention} onDiscard={(id) => void discard(id)} />
+          {ready?.status === 'waiting' || ready?.status === 'queued' ? (
+            <Notice tone="blue" title="Ready requested">Loading is locked while the ready request is sent. See Depart.</Notice>
+          ) : !editable ? (
             <Notice tone="green" title="Loading finalized">This trip is {TRIP_LABEL[view.trip.status].toLowerCase()}; loading can no longer change.</Notice>
           ) : null}
           <Text style={styles.muted}>Load order: last stop first (deepest in the vehicle)</Text>
@@ -65,6 +76,11 @@ export default function ChecklistScreen() {
                       {order.load_status ? LOAD_LABEL[order.load_status] : 'Not checked'}
                       {order.note ? ` · ${order.note}` : ''}
                     </Text>
+                    {order.local ? (
+                      <Text style={styles.local} accessibilityLabel="Saved on this phone, not yet synced">
+                        {order.local === 'syncing' ? 'Sending…' : 'Saved on phone · waiting to sync'}
+                      </Text>
+                    ) : null}
                   </View>
                   {editable ? (
                     <View style={styles.actions}>
@@ -112,6 +128,7 @@ const styles = StyleSheet.create({
   order: { flexDirection: 'row', alignItems: 'center', gap: 10, borderTopWidth: 1, borderTopColor: t.border, paddingTop: 10 },
   orderTitle: { fontSize: 14, fontWeight: '700', color: t.text },
   state: { fontSize: 13, fontWeight: '700', color: t.green, marginTop: 2 },
+  local: { fontSize: 12, fontWeight: '700', color: t.amber, marginTop: 2 },
   actions: { gap: 6 },
   btn: { borderRadius: 10, borderWidth: 1, borderColor: t.border, paddingHorizontal: 12, paddingVertical: 8, alignItems: 'center' },
   btnPrimary: { backgroundColor: t.blue, borderColor: t.blue },

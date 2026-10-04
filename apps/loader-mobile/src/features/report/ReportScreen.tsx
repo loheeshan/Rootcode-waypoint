@@ -5,7 +5,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { ActionButton, Notice } from '../../components/ui/ScreenKit';
 import { t } from '../../theme/loaderTokens';
 import { useLoading } from '../loading/LoadingProvider';
-import { LOAD_LABEL, canLoad, shortId } from '../loading/format';
+import { LOAD_LABEL, shortId } from '../loading/format';
 
 type Problem = 'MISSING' | 'DAMAGED';
 
@@ -13,7 +13,7 @@ type Problem = 'MISSING' | 'DAMAGED';
 export default function ReportScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ orderId?: string }>();
-  const { tripId, view, error, busy, record, refresh } = useLoading();
+  const { tripId, view, error, busy, record, refresh, editable } = useLoading();
   const [orderId, setOrderId] = useState<string | null>(params.orderId ?? null);
   const [problem, setProblem] = useState<Problem>('MISSING');
   const [note, setNote] = useState('');
@@ -46,7 +46,6 @@ export default function ReportScreen() {
   }
 
   const orders = view.stops.flatMap((stop) => stop.orders.map((order) => ({ stop, order })));
-  const editable = canLoad(view.trip.status);
 
   const submit = async () => {
     setSaved(null);
@@ -55,7 +54,7 @@ export default function ReportScreen() {
     if (note.length > 500) return setInvalid('Keep the note to 500 characters.');
     setInvalid(null);
     if (await record(orderId, problem, note.trim())) {
-      setSaved(`Order ${shortId(orderId)} recorded as ${LOAD_LABEL[problem].toLowerCase()}.`);
+      setSaved(`Order ${shortId(orderId)} recorded as ${LOAD_LABEL[problem].toLowerCase()} on this phone.`);
       setNote('');
     }
   };
@@ -63,8 +62,8 @@ export default function ReportScreen() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <Text style={styles.title}>Report a problem</Text>
-      {!editable ? <Notice tone="green" title="Loading finalized">Problems can only be recorded before the trip is ready.</Notice> : null}
-      {saved ? <Notice tone="green" title="Saved">{saved} The dispatcher sees it as a loading exception.</Notice> : null}
+      {!editable ? <Notice tone="green" title="Loading locked">Problems can only be recorded before the trip is marked ready.</Notice> : null}
+      {saved ? <Notice tone="green" title="Saved">{saved} It is sent to the server automatically; the dispatcher sees it once it syncs.</Notice> : null}
       {error ? <Notice tone="red" title="Not saved">{error}</Notice> : null}
       {invalid ? <Notice tone="amber" title="Check the report">{invalid}</Notice> : null}
 

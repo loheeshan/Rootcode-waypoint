@@ -1,124 +1,199 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   ApiError,
   errorMessage,
-  type LoadEventResponse,
   type LoadStatus,
   type TripLoadingResponse,
 } from '@waypoint/api-contracts';
+import type { OutboxEvent } from '@waypoint/mobile-sync';
 import { randomUUID } from 'expo-crypto';
 
 import { getApiClient } from '../../services/api';
+import { useSync } from '../../sync/SyncProvider';
+import { addReadyRequest, latestReadyRequest, readTripView, saveTripView, type ReadyRequest } from '../../sync/store';
+import { canLoad } from './format';
+import { overlay, type TripView } from './overlay';
 
-/** Online loading for one selected trip. Offline queuing is added with the SQLite outbox. */
+export type { LocalState, OrderView, TripView } from './overlay';
+
+
 type LoadingState = {
   tripId: string | null;
-  view: TripLoadingResponse | null;
+  view: TripView | null;
+  /** When the server copy was fetched; `offline` when the latest fetch failed and the copy is cached. */
+  fetchedAt: string | null;
+  offline: boolean;
+  /** Load events the server did not apply (REJECTED/CONFLICT), oldest first. */
+  attention: OutboxEvent[];
+  /** Unsent load events for this trip. */
+  unsent: number;
+  ready: ReadyRequest | null;
+  /** True when loading can still change on this phone (server not finalized, no ready request waiting). */
+  editable: boolean;
   loading: boolean;
-  /** Last failure shown to the user (server message or connectivity). */
   error: string | null;
-  /** True while an event or ready request is in flight; actions are disabled meanwhile. */
   busy: boolean;
   select: (tripId: string) => void;
   refresh: () => Promise<void>;
   record: (orderId: string, status: LoadStatus, note?: string) => Promise<boolean>;
   markReady: () => Promise<boolean>;
+  discard: (eventId: string) => Promise<void>;
 };
 
 const LoadingContext = createContext<LoadingState | null>(null);
 
 export function LoadingProvider({ children }: { children: ReactNode }) {
+  const sync = useSync();
+  const { db, outbox, userId, version, changed } = sync;
   const [tripId, setTripId] = useState<string | null>(null);
-  const [view, setView] = useState<TripLoadingResponse | null>(null);
+  const [server, setServer] = useState<TripLoadingResponse | null>(null);
+  const [fetchedAt, setFetchedAt] = useState<string | null>(null);
+  const [offline, setOffline] = useState(false);
+  const [events, setEvents] = useState<OutboxEvent[]>([]);
+  const [ready, setReady] = useState<ReadyRequest | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const inFlight = useRef(false);
-  // One ID per intended action: a retry of the same payload reuses it so the server applies it once.
-  const eventIds = useRef(new Map<string, string>());
-  const readyIds = useRef(new Map<string, string>());
+  // The trip and account the screen shows; results for anything else are dropped.
+  const current = useRef<{ trip: string | null; user: string | null }>({ trip: null, user: null });
+  const loadSeq = useRef(0);
 
-  // The trip the user last selected; responses for any other trip are dropped.
-  const current = useRef<string | null>(null);
+  /** Re-read this phone's state for the trip: cached server copy, unsent events, ready request. */
+  const readLocal = useCallback(async (user: string, trip: string) => {
+    const [cached, open, request] = await Promise.all([
+      readTripView(db, user, trip),
+      outbox.list(user, { tripId: trip }),
+      latestReadyRequest(db, user, trip),
+    ]);
+    if (current.current.trip !== trip || current.current.user !== user) return;
+    if (cached) {
+      setServer(cached.value);
+      setFetchedAt(cached.fetchedAt);
+    }
+    setEvents(open);
+    setReady(request);
+  }, [db, outbox]);
 
-  const load = useCallback(async (id: string) => {
+  const load = useCallback(async (user: string, trip: string) => {
+    const seq = ++loadSeq.current;
+    const latest = () => loadSeq.current === seq && current.current.trip === trip && current.current.user === user;
     setLoading(true);
+    await readLocal(user, trip);
     try {
-      const next = await getApiClient().request<TripLoadingResponse>(`/trips/${id}/loading`);
-      if (current.current !== id) return;
-      setView(next);
+      const view = await getApiClient().request<TripLoadingResponse>(`/trips/${trip}/loading`);
+      if (!latest()) return;
+      await saveTripView(db, user, view);
+      await readLocal(user, trip);
+      setOffline(false);
       setError(null);
     } catch (failure) {
-      if (current.current !== id) return;
-      // Keep the last server view; only report that it could not be refreshed.
+      if (!latest()) return;
+      setOffline(!(failure instanceof ApiError));
       setError(describeRead(failure));
     } finally {
-      if (current.current === id) setLoading(false);
+      if (latest()) setLoading(false);
     }
-  }, []);
+  }, [db, readLocal]);
+
+  // A different account never sees the previous account's trip.
+  useEffect(() => {
+    current.current = { trip: null, user: userId };
+    setTripId(null);
+    setServer(null);
+    setEvents([]);
+    setReady(null);
+    setError(null);
+  }, [userId]);
+
+  // After every local write or sync pass, show the latest local and cached state.
+  useEffect(() => {
+    const { trip, user } = current.current;
+    if (trip && user) void readLocal(user, trip);
+  }, [version, readLocal]);
 
   const select = useCallback((id: string) => {
-    if (current.current !== id) {
-      current.current = id;
+    if (!userId) return;
+    if (current.current.trip !== id) {
+      current.current = { trip: id, user: userId };
       setTripId(id);
-      setView(null);
+      setServer(null);
+      setFetchedAt(null);
+      setEvents([]);
+      setReady(null);
     }
     setError(null);
-    void load(id);
-  }, [load]);
+    void load(userId, id);
+  }, [userId, load]);
 
   const refresh = useCallback(async () => {
-    if (tripId) await load(tripId);
-  }, [tripId, load]);
+    const { trip, user } = current.current;
+    if (trip && user) await load(user, trip);
+  }, [load]);
 
-  const guarded = useCallback(async (action: (id: string) => Promise<void>): Promise<boolean> => {
-    const id = current.current;
-    if (!id || inFlight.current) return false;
+  const view = useMemo(() => (server ? overlay(server, events, fetchedAt) : null), [server, events, fetchedAt]);
+  const attention = useMemo(() => events.filter((e) => e.status === 'failed' && e.type === 'LOAD_RECORDED'), [events]);
+  const unsent = events.filter((e) => e.type === 'LOAD_RECORDED' && (e.status === 'pending' || e.status === 'syncing')).length;
+  const readyOpen = ready?.status === 'waiting' || ready?.status === 'queued';
+  const editable = !!view && canLoad(view.trip.status) && !readyOpen;
+
+  const guarded = useCallback(async (action: (user: string, trip: string) => Promise<boolean>) => {
+    const { trip, user } = current.current;
+    if (!trip || !user || inFlight.current) return false;
     inFlight.current = true;
     setBusy(true);
     setError(null);
     try {
-      await action(id);
-      return current.current === id;
-    } catch (failure) {
-      if (current.current !== id) return false;
-      // Conflicts mean the server state moved on (e.g. finalized or stale); show it.
-      // Reload first because a successful load() clears the error.
-      if (failure instanceof ApiError && failure.status === 409) await load(id);
-      setError(describe(failure));
+      return await action(user, trip);
+    } catch {
+      setError('This could not be saved on the phone. Try again.');
       return false;
     } finally {
       inFlight.current = false;
       setBusy(false);
     }
-  }, [load]);
+  }, []);
 
-  const record = useCallback((orderId: string, status: LoadStatus, note?: string) => guarded(async (id) => {
-    const key = `${id}:${orderId}:${status}:${note ?? ''}`;
-    if (!eventIds.current.has(key)) eventIds.current.set(key, randomUUID());
-    await getApiClient().request<LoadEventResponse>(`/trips/${id}/load-events`, {
-      method: 'POST',
-      body: JSON.stringify({ event_id: eventIds.current.get(key), order_id: orderId, status, note: note ?? null }),
+  const record = useCallback((orderId: string, status: LoadStatus, note?: string) => guarded(async (user, trip) => {
+    if (!view || view.trip.trip_id !== trip || !editable) return false;
+    const order = view.stops.flatMap((s) => s.orders).find((o) => o.order_id === orderId);
+    if (!order) return false;
+    // A repeat of the outcome already recorded (e.g. a double tap) adds nothing.
+    if (order.load_status === status && (order.note ?? null) === (note ?? null)) return true;
+    await outbox.add(user, {
+      event_id: randomUUID(),
+      type: 'LOAD_RECORDED',
+      trip_id: trip,
+      subject_id: orderId,
+      payload: { order_id: orderId, status, note: note ?? null },
     });
-    // A newer outcome for this order supersedes any unconfirmed attempt; never replay those IDs later.
-    for (const k of [...eventIds.current.keys()]) if (k.startsWith(`${id}:${orderId}:`)) eventIds.current.delete(k);
-    await load(id);
-  }), [guarded, load]);
+    await readLocal(user, trip);
+    changed();
+    return true;
+  }), [guarded, view, editable, outbox, readLocal, changed]);
 
-  const markReady = useCallback(() => guarded(async (id) => {
-    if (!view || view.trip.trip_id !== id) return;
-    const key = `${id}:${view.last_event_sequence}`;
-    if (!readyIds.current.has(key)) readyIds.current.set(key, randomUUID());
-    const result = await getApiClient().request<TripLoadingResponse>(`/trips/${id}/ready`, {
-      method: 'POST',
-      body: JSON.stringify({ request_id: readyIds.current.get(key), last_event_sequence: view.last_event_sequence }),
-    });
-    if (current.current === id) setView(result);
-  }), [view, guarded]);
+  /**
+   * Stores a ready request. It is sent only after every load event of the trip is acknowledged,
+   * with the sequence the server reports then; the trip shows READY only when the server says so.
+   */
+  const markReady = useCallback(() => guarded(async (user, trip) => {
+    if (!view || view.trip.trip_id !== trip || !editable) return false;
+    if (view.pending_count > 0 || view.loaded_count === 0 || attention.length) return false;
+    await addReadyRequest(db, user, trip, randomUUID());
+    await readLocal(user, trip);
+    changed();
+    return true;
+  }), [guarded, view, editable, attention.length, db, readLocal, changed]);
+
+  const discard = useCallback(async (eventId: string) => {
+    await sync.discard(eventId);
+    const { trip, user } = current.current;
+    if (trip && user) await readLocal(user, trip);
+  }, [sync, readLocal]);
 
   const value = useMemo(
-    () => ({ tripId, view, loading, error, busy, select, refresh, record, markReady }),
-    [tripId, view, loading, error, busy, select, refresh, record, markReady],
+    () => ({ tripId, view, fetchedAt, offline, attention, unsent, ready, editable, loading, error, busy, select, refresh, record, markReady, discard }),
+    [tripId, view, fetchedAt, offline, attention, unsent, ready, editable, loading, error, busy, select, refresh, record, markReady, discard],
   );
   return <LoadingContext.Provider value={value}>{children}</LoadingContext.Provider>;
 }
@@ -129,15 +204,8 @@ export function useLoading(): LoadingState {
   return value;
 }
 
-function describe(failure: unknown): string {
-  if (!(failure instanceof ApiError)) return 'Cannot reach the Waypoint server. Nothing was saved; try again.';
-  if (failure.status === 401) return 'Your session has expired. Sign in again.';
-  if (failure.status === 404) return 'This trip is no longer available to your account.';
-  return errorMessage(failure, 'The server could not save this. Try again.');
-}
-
 function describeRead(failure: unknown): string {
-  if (!(failure instanceof ApiError)) return 'Could not refresh the trip (no connection). Pull to try again.';
+  if (!(failure instanceof ApiError)) return 'No connection. Showing the copy saved on this phone.';
   if (failure.status === 401) return 'Your session has expired. Sign in again.';
   if (failure.status === 404) return 'This trip is no longer available to your account.';
   return errorMessage(failure, 'Could not refresh the trip. Pull to try again.');

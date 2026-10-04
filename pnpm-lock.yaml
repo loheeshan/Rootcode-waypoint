@@ -152,6 +152,9 @@ importers:
       '@waypoint/api-contracts':
         specifier: workspace:*
         version: link:../../packages/api-contracts
+      '@waypoint/mobile-sync':
+        specifier: workspace:*
+        version: link:../../packages/mobile-sync
       '@waypoint/mobile-ui':
         specifier: workspace:*
         version: link:../../packages/mobile-ui
@@ -238,6 +241,12 @@ importers:
         version: link:../shared-types
 
   packages/design-tokens: {}
+
+  packages/mobile-sync:
+    dependencies:
+      '@waypoint/api-contracts':
+        specifier: workspace:*
+        version: link:../api-contracts
 
   packages/mobile-ui:
     dependencies:
