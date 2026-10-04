@@ -28,7 +28,7 @@ Use the real FastAPI/PostgreSQL backend; mocked responses do not count. Never re
 | Published trips and stop-ordered manifest | Server trips/orders | PASS (Step 5) |
 | LOADED / MISSING / DAMAGED with notes; retry | One event per action; latest outcome shown | PASS (double tap; device retry after network loss NOT RUN) |
 | Ready (all orders recorded, at least one LOADED) | READY visible to the Driver API | PASS (Step 5; stale sequence refreshes) |
-| Offline save -> kill/relaunch -> reconnect | Events apply exactly once | NOT RUN |
+| Offline save -> kill/relaunch -> reconnect | Events apply exactly once | PASS (Step 7, emulator: airplane mode, relaunch, reconnect) |
 
 ## Driver (mobile, `driver@waypoint.demo`)
 

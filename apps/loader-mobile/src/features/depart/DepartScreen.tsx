@@ -4,12 +4,13 @@ import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native
 import { ActionButton, Notice } from '../../components/ui/ScreenKit';
 import { t } from '../../theme/loaderTokens';
 import { useLoading } from '../loading/LoadingProvider';
-import { TRIP_LABEL, canLoad, colomboTime, shortId } from '../loading/format';
+import { SyncBanner } from '../../sync/SyncBanner';
+import { TRIP_LABEL, colomboTime, shortId } from '../loading/format';
 
 /** Server readiness rules: every order has an outcome and at least one order is loaded. */
 export default function DepartScreen() {
   const router = useRouter();
-  const { tripId, view, loading, error, busy, refresh, markReady } = useLoading();
+  const { tripId, view, loading, error, busy, refresh, markReady, editable, attention, unsent, offline, fetchedAt, ready: request } = useLoading();
 
   if (!tripId) {
     return (
@@ -30,13 +31,15 @@ export default function DepartScreen() {
     );
   }
 
+  // READY only ever comes from the server copy, never from the local request.
   const ready = view.trip.status !== 'PLANNED' && view.trip.status !== 'LOADING';
   const checks: [boolean, string][] = [
-    [view.trip.status !== 'PLANNED', 'Loading has started'],
     [view.pending_count === 0, `Every order has an outcome (${view.pending_count} left)`],
     [view.loaded_count > 0, 'At least one order is loaded'],
+    [attention.length === 0, 'No loading change needs attention'],
   ];
-  const canMark = canLoad(view.trip.status) && checks.every(([ok]) => ok);
+  const requested = ready === false && (request?.status === 'waiting' || request?.status === 'queued');
+  const canMark = editable && checks.every(([ok]) => ok);
   const exceptions = view.stops.flatMap((stop) =>
     stop.orders.filter((o) => o.load_status === 'MISSING' || o.load_status === 'DAMAGED').map((o) => ({ stop, o })));
 
@@ -47,13 +50,30 @@ export default function DepartScreen() {
       <Text style={styles.muted}>
         Trip {view.trip.trip_number} · Vehicle {shortId(view.trip.vehicle_id)} · departs {colomboTime(view.trip.departure_at)}
       </Text>
-      {error ? <Notice tone="red" title="Not marked ready">{error}</Notice> : null}
+      <SyncBanner />
+      {offline ? (
+        <Notice tone="amber" title="Offline">
+          Showing the copy saved {fetchedAt ? `at ${colomboTime(fetchedAt)}` : 'on this phone'}. A ready request is kept on this phone and sent when you are back online.
+        </Notice>
+      ) : error ? <Notice tone="red" title="Not refreshed">{error}</Notice> : null}
       {ready ? (
         <Notice tone="green" title={`Trip ${TRIP_LABEL[view.trip.status].toLowerCase()}`}>
           {view.completion
             ? `Confirmed by the server with ${view.completion.loaded_count} loaded, ${view.completion.missing_count} missing and ${view.completion.damaged_count} damaged. The assigned driver can now start the trip.`
             : 'Loading is finalized on the server.'}
         </Notice>
+      ) : null}
+      {requested ? (
+        <Notice tone="blue" title="Ready requested — not yet confirmed">
+          {request?.status === 'queued'
+            ? 'Sending the ready request to the server…'
+            : unsent
+              ? `Waiting for ${unsent} loading change${unsent === 1 ? '' : 's'} to sync first. The trip is not ready until the server confirms it.`
+              : 'Waiting to reach the server. The trip is not ready until the server confirms it.'}
+        </Notice>
+      ) : null}
+      {!ready && request?.status === 'failed' ? (
+        <Notice tone="red" title="Ready request not accepted">{request.detail ?? 'The server did not accept it.'} Refresh, check the trip and mark it ready again.</Notice>
       ) : null}
 
       <View style={styles.card}>
@@ -72,9 +92,9 @@ export default function DepartScreen() {
         </Notice>
       ) : null}
 
-      {!ready ? (
+      {!ready && !requested ? (
         canMark
-          ? <ActionButton label={busy ? 'Marking ready…' : 'Mark trip ready'} disabled={busy} onPress={() => void markReady()} />
+          ? <ActionButton label={request?.status === 'failed' ? 'Mark trip ready again' : 'Mark trip ready'} disabled={busy} onPress={() => void markReady()} />
           : <ActionButton variant="secondary" label="Continue loading" onPress={() => router.navigate('/tabs/checklist')} />
       ) : null}
     </ScrollView>

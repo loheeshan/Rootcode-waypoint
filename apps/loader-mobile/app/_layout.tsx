@@ -6,6 +6,7 @@ import { Text, View } from 'react-native';
 import { initializeDatabase } from '../src/storage/database';
 import { DialogProvider } from '../src/features/dialogs/DialogProvider';
 import { AuthGate, AuthProvider } from '../src/services/auth';
+import { SyncProvider } from '../src/sync/SyncProvider';
 
 class StorageBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
   state = { failed: false };
@@ -23,6 +24,7 @@ export default function RootLayout() {
         <StorageBoundary>
           <SQLiteProvider databaseName="waypoint-loader.db" onInit={initializeDatabase}>
             <AuthProvider>
+              <SyncProvider>
               <DialogProvider>
                 <AuthGate />
                 <Stack screenOptions={{ headerShown: false }}>
@@ -30,6 +32,7 @@ export default function RootLayout() {
                   <Stack.Screen name="tabs" />
                 </Stack>
               </DialogProvider>
+              </SyncProvider>
             </AuthProvider>
           </SQLiteProvider>
         </StorageBoundary>

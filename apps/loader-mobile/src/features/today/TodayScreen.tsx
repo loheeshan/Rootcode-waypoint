@@ -8,6 +8,9 @@ import { StatusBanner } from '../../components/ui/StatusBanner';
 import { useIsOffline } from '../../hooks/useIsOffline';
 import { getApiClient } from '../../services/api';
 import { useAuth } from '../../services/auth';
+import { SyncBanner } from '../../sync/SyncBanner';
+import { useSync } from '../../sync/SyncProvider';
+import { readTripList, saveTripList } from '../../sync/store';
 import { t } from '../../theme/loaderTokens';
 import { useLoading } from '../loading/LoadingProvider';
 import { TRIP_LABEL, colomboTime, colomboToday, shortId } from '../loading/format';
@@ -25,20 +28,31 @@ export default function TodayScreen() {
   const [trips, setTrips] = useState<LoaderTripResponse[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [cachedAt, setCachedAt] = useState<string | null>(null);
+  const { db, userId } = useSync();
   const today = colomboToday();
 
+  // Server list first; offline, the copy last saved on this phone for this account and day.
   const load = useCallback(async () => {
+    if (!userId) return;
     setRefreshing(true);
     setError(null);
     try {
       const page = await getApiClient().request<LoaderTripListResponse>(`/loader/trips?delivery_date=${today}&limit=100`);
+      await saveTripList(db, userId, today, page.items);
       setTrips(page.items);
+      setCachedAt(null);
     } catch (failure) {
-      setError(failure instanceof ApiError ? 'Trips could not be loaded. Pull to try again.' : 'No connection. Pull to retry when online.');
+      const cached = await readTripList(db, userId, today);
+      if (cached) {
+        setTrips(cached.value);
+        setCachedAt(cached.fetchedAt);
+      }
+      setError(failure instanceof ApiError ? 'Trips could not be refreshed. Pull to try again.' : null);
     } finally {
       setRefreshing(false);
     }
-  }, [today]);
+  }, [today, db, userId]);
 
   // Refetch whenever Today is shown so statuses changed on other tabs (e.g. READY) are current.
   useFocusEffect(useCallback(() => { void load(); }, [load]));
@@ -62,8 +76,9 @@ export default function TodayScreen() {
       contentContainerStyle={styles.content}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={load} />}
     >
-      {offline && <StatusBanner title="No connection" message="— trips need a connection until offline storage is added." />}
+      {offline && <StatusBanner title="No connection" message={cachedAt ? `— showing trips saved at ${colomboTime(cachedAt)}.` : trips ? '— showing trips saved on this phone.' : '— no trips saved on this phone yet.'} />}
       <Text style={styles.title}>Today's loading</Text>
+      <SyncBanner />
 
       <View style={styles.plan}>
         <View style={styles.spread}>

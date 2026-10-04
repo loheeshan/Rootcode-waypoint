@@ -16,6 +16,7 @@
     "@react-native-community/netinfo": "12.0.1",
     "@react-native/metro-config": "0.85.3",
     "@waypoint/api-contracts": "workspace:*",
+    "@waypoint/mobile-sync": "workspace:*",
     "@waypoint/mobile-ui": "workspace:*",
     "@waypoint/shared-types": "workspace:*",
     "expo": "57.0.26",

@@ -4,14 +4,17 @@ import { useRouter } from 'expo-router';
 import { EndShiftModal } from '../src/components/modals/EndShiftModal';
 import { popupColors } from '../src/theme/popupTokens';
 import { LOGIN, useAuth } from '../src/services/auth';
+import { useSync } from '../src/sync/SyncProvider';
 
 export default function EndShiftScreen() {
   const router = useRouter();
   const { signOut } = useAuth();
+  const { counts } = useSync();
   const [visible, setVisible] = useState(true);
 
   const handleSignOut = async () => {
-    // Deletes the SecureStore token; the local queue stays in Expo SQLite for the next sign-in.
+    // Deletes the SecureStore token. Unsent events stay in SQLite under this user's ID and are sent
+    // only after this same account signs in again.
     setVisible(false);
     await signOut();
     router.replace(LOGIN);
@@ -29,6 +32,7 @@ export default function EndShiftScreen() {
         visible={visible}
         onSignOut={handleSignOut}
         onKeepWorking={handleKeepWorking}
+        unsent={counts.pending + counts.syncing + counts.failed}
       />
     </View>
   );

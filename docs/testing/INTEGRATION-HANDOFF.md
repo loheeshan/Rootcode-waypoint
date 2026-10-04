@@ -12,8 +12,8 @@ Never record passwords, tokens or `.env` contents here.
 | 3 Store web | `feature/integration-store-web` | Step 2 `978bb94` | Done (`e6b42be`, merged #205) |
 | 4 Dispatcher web | `feature/integration-dispatcher-web` | — | **Deferred**: frontend team still building Dispatcher web |
 | 5 Loader online | `feature/integration-loader-mobile` | `dev` `066dcad` | Done (`b865967`, merged #206) |
-| 6 Driver online | `feature/integration-driver-mobile` | `dev` `8113aa3` | In review |
-| 7 Loader offline | `feature/integration-loader-offline` | Step 6 | Pending |
+| 6 Driver online | `feature/integration-driver-mobile` | `dev` `8113aa3` | Done (`5a0c6ce`, merged #207) |
+| 7 Loader offline | `feature/integration-loader-offline` | `dev` `865f0f8` | In review |
 | 8 Driver offline | `feature/integration-driver-offline` | Step 7 | Pending |
 | 9 Acceptance | `feature/integration-release-validation` | all | Pending (needs Step 4) |
 
@@ -305,6 +305,33 @@ Notes: Expo Go asks for camera access per project in addition to Android's promp
 Prototype screens not on this flow (`next-stop-*`, `trip-complete`, `photo-attention`, offline failure, etc.)
 still show static design data.
 
+## Step 7: Loader offline persistence and sync
+
+- New shared package `@waypoint/mobile-sync` (no Expo imports; each app passes its own SQLite):
+  per-account outbox with immutable rows (SQLite trigger), batches of at most 50 in creation order,
+  per-trip causal blocking, per-event outcomes (APPLIED/DUPLICATE -> synced; REJECTED/CONFLICT ->
+  needs attention, never resent automatically; RETRY/network -> bounded backoff 2 s..5 min;
+  SKIPPED -> waits for the earlier event), 401/403 pause without losing work, relaunch recovery.
+- Loader: schema v2 (trip list and trip views cached per user; ready requests). Changes are saved on
+  the phone first and shown as "Saved on phone · waiting to sync"/"Sending…". Ready is a stored
+  request sent only after the trip's loading changes are acknowledged, with the server's sequence.
+  Details in `apps/loader-mobile/src/sync/README.md`.
+
+Verification (Pixel 7 emulator, Expo Go SDK 57, disposable database):
+
+| Check | Result |
+|---|---|
+| Sign in, open both trips, airplane mode | PASS: cached trips and checklist shown with "Offline" notice |
+| Offline: Loaded, Missing with note, double tap Loaded, Ready request | PASS: saved on phone, counts update, double tap adds nothing; Depart shows "Ready requested — not yet confirmed", trip not READY |
+| Kill and relaunch with network on but API stopped | PASS: 5 changes survive; sync fails quietly and backs off |
+| API back; same trip finalized from another session meanwhile | PASS: Trip 2 changes APPLIED, then TRIP_READY with server sequence -> READY (Driver API sees READY); Trip 1 change CONFLICT shown with server reason, discarded by the user |
+| Exactly once (DB) | PASS: 3 LOAD_RECORDED + 1 TRIP_READY receipts; 1 completion per trip |
+| Expired session (new JWT secret) | PASS: "Your session has expired"; queue kept |
+| Account switch: loader1 records offline, signs out (warning shows 1 unsynced), loader2 signs in online | PASS: loader2 sees no local change and makes 0 sync calls; loader1 signs in again -> change synced once |
+| Tests | PASS: `pnpm test` (outbox 11, overlay 3, plus existing) |
+| Physical device / iOS | NOT RUN |
+| Partial batch / RETRY / 50-event batches / stale sequence | Covered by unit tests against real SQLite (not on device) |
+
 ## Next step
 
-Step 7 on `feature/integration-loader-offline` (Step 4 Dispatcher web stays deferred).
+Step 8 on `feature/integration-driver-offline` (Step 4 Dispatcher web stays deferred).
