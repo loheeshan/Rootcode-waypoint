@@ -107,6 +107,19 @@ confirming user. The service writes the receipt and the order's
 because none are specified. Downgrading to `0011_delivery_events` drops the table but
 keeps `RECEIPT_CONFIRMED` order statuses; test rollback only on disposable databases.
 
+### Sync receipts
+
+Migration `0013_sync_events` preserves all 25 earlier application tables and adds
+`sync_events`: UUID `id`; unique client `event_id`; `device_id` (1-100 characters,
+not blank); `user_id` (token identity); `trip_id`; `entity_type`
+(`TRIP`/`STOP`/`ORDER`) with `entity_id`; `event_type` (the seven sync types);
+`request_hash`; `received_at`. FKs to users and trips use `RESTRICT`; indexes cover
+the user and `(trip_id, received_at)`. A receipt is inserted only in the same
+transaction as a successful domain change, never for failures. Domain tables keep
+their own event IDs, so replays still resolve if a receipt is missing. Downgrading
+to `0012_receipt_confirmations` drops only this table; test rollback on disposable
+databases.
+
 ### Identity
 
 - `users`: UUID primary key, unique lowercase/trimmed nonempty email (up to 320
@@ -553,6 +566,8 @@ id
 event_id UNIQUE
 device_id
 user_id
+trip_id
+request_hash
 entity_type
 entity_id
 event_type

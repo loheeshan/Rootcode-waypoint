@@ -1,10 +1,11 @@
 import type {
-  DeferralReason, DeliveryEventType, DeliveryFailureReason, LoadStatus, OrderStatus, PlanStatus, Role, StopStatus, TripStatus,
+  DeferralReason, DeliveryEventType, DeliveryFailureReason, LoadStatus, SyncEventType,
+  SyncOutcome, OrderStatus, PlanStatus, Role, StopStatus, TripStatus,
 } from '@waypoint/shared-types';
 
 export type {
   Role, OrderStatus, TripStatus, PlanStatus, StopStatus, AssignmentOutcome, DeferralReason, LoadStatus,
-  DeliveryEventType, DeliveryFailureReason, SyncStatus,
+  DeliveryEventType, DeliveryFailureReason, SyncEventType, SyncOutcome, SyncStatus,
 } from '@waypoint/shared-types';
 export interface HealthResponse { status: 'ok'; service: string; version: string }
 export interface LoginRequest { email: string; password: string }
@@ -428,6 +429,41 @@ export interface DeliveryEventResponse {
   recorded_by: string;
   trip_status: TripStatus;
   stop_status: StopStatus | null;
+}
+/** Payloads are the matching REST bodies without their ID field (the envelope event_id is used). */
+export type SyncEventPayload =
+  | { type: 'LOAD_RECORDED'; payload: Omit<LoadEventRequest, 'event_id'> }
+  | { type: 'TRIP_READY'; payload: Omit<TripReadyRequest, 'request_id'> }
+  | { type: 'TRIP_STARTED' | 'TRIP_COMPLETED' | 'STOP_ARRIVED'; payload: Omit<DeliveryEventRequest, 'event_id'> }
+  | { type: 'STOP_DELIVERED'; payload: Omit<DeliverRequest, 'event_id'> }
+  | { type: 'STOP_FAILED'; payload: Omit<FailRequest, 'event_id'> };
+export type SyncEventRequest = SyncEventPayload & {
+  event_id: string;
+  trip_id: string;
+  /** Required for STOP_* events, omitted otherwise. */
+  stop_id?: string;
+};
+export interface SyncBatchRequest {
+  device_id: string;
+  /** 1-50 events, oldest first, in the order they were created on the device. */
+  events: SyncEventRequest[];
+}
+export interface SyncEventResult {
+  index: number;
+  event_id: string | null;
+  type: SyncEventType | null;
+  trip_id: string | null;
+  outcome: SyncOutcome;
+  http_status: number;
+  detail: string | null;
+  /** The domain response (LoadEventResponse, TripLoadingResponse or DeliveryEventResponse). */
+  result: Record<string, unknown> | null;
+}
+export interface SyncBatchResponse {
+  device_id: string;
+  received_at: string;
+  results: SyncEventResult[];
+  counts: Record<SyncOutcome, number>;
 }
 /** Reuse request_id when retrying an uncertain confirmation. */
 export interface ReceiptRequest {

@@ -13,6 +13,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.auth.models import RoleCode, User
+from app.db.transactions import BeforeCommit, commit_with
 from app.delivery.models import (
     MAX_POD_BYTES,
     DeliveryEvent,
@@ -147,8 +148,10 @@ class _Transition:
         event_type: DeliveryEventType,
         payload: EventRequest,
         now: datetime,
+        before_commit: BeforeCommit | None = None,
     ) -> None:
         self.session, self.user, self.now, self.payload = session, user, now, payload
+        self.before_commit = before_commit
         self.event_type = event_type
         self.trip, self.plan, _ = _driver_trip(session, user, trip_id, lock=True)
         self.stop: TripStop | None = None
@@ -204,14 +207,21 @@ class _Transition:
         self.session.add(event)
         self.session.flush()
         result = _event_response(event, self.trip, self.stop)
-        self.session.commit()
+        commit_with(self.session, result, self.before_commit)
         return result
 
 
 def start_trip(
-    session: Session, user: User, trip_id: UUID, payload: EventRequest, now: datetime
+    session: Session,
+    user: User,
+    trip_id: UUID,
+    payload: EventRequest,
+    now: datetime,
+    before_commit: BeforeCommit | None = None,
 ) -> tuple[DeliveryEventResponse, bool]:
-    step = _Transition(session, user, trip_id, None, DeliveryEventType.TRIP_STARTED, payload, now)
+    step = _Transition(
+        session, user, trip_id, None, DeliveryEventType.TRIP_STARTED, payload, now, before_commit
+    )
     if (replayed := step.replay()) is not None:
         return replayed, False
     trip = step.trip
@@ -236,9 +246,17 @@ def start_trip(
 
 
 def arrive_at_stop(
-    session: Session, user: User, trip_id: UUID, stop_id: UUID, payload: EventRequest, now: datetime
+    session: Session,
+    user: User,
+    trip_id: UUID,
+    stop_id: UUID,
+    payload: EventRequest,
+    now: datetime,
+    before_commit: BeforeCommit | None = None,
 ) -> tuple[DeliveryEventResponse, bool]:
-    step = _Transition(session, user, trip_id, stop_id, DeliveryEventType.ARRIVED, payload, now)
+    step = _Transition(
+        session, user, trip_id, stop_id, DeliveryEventType.ARRIVED, payload, now, before_commit
+    )
     if (replayed := step.replay()) is not None:
         return replayed, False
     stop = step.stop
@@ -265,8 +283,11 @@ def deliver_stop(
     stop_id: UUID,
     payload: DeliverRequest,
     now: datetime,
+    before_commit: BeforeCommit | None = None,
 ) -> tuple[DeliveryEventResponse, bool]:
-    step = _Transition(session, user, trip_id, stop_id, DeliveryEventType.DELIVERED, payload, now)
+    step = _Transition(
+        session, user, trip_id, stop_id, DeliveryEventType.DELIVERED, payload, now, before_commit
+    )
     if (replayed := step.replay()) is not None:
         return replayed, False
     stop = step.stop
@@ -293,8 +314,11 @@ def fail_stop(
     stop_id: UUID,
     payload: FailRequest,
     now: datetime,
+    before_commit: BeforeCommit | None = None,
 ) -> tuple[DeliveryEventResponse, bool]:
-    step = _Transition(session, user, trip_id, stop_id, DeliveryEventType.FAILED, payload, now)
+    step = _Transition(
+        session, user, trip_id, stop_id, DeliveryEventType.FAILED, payload, now, before_commit
+    )
     if (replayed := step.replay()) is not None:
         return replayed, False
     stop = step.stop
@@ -309,9 +333,16 @@ def fail_stop(
 
 
 def complete_trip(
-    session: Session, user: User, trip_id: UUID, payload: EventRequest, now: datetime
+    session: Session,
+    user: User,
+    trip_id: UUID,
+    payload: EventRequest,
+    now: datetime,
+    before_commit: BeforeCommit | None = None,
 ) -> tuple[DeliveryEventResponse, bool]:
-    step = _Transition(session, user, trip_id, None, DeliveryEventType.TRIP_COMPLETED, payload, now)
+    step = _Transition(
+        session, user, trip_id, None, DeliveryEventType.TRIP_COMPLETED, payload, now, before_commit
+    )
     if (replayed := step.replay()) is not None:
         return replayed, False
     required = set(_deliverable(session, step.trip))

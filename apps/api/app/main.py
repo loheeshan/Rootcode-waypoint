@@ -15,6 +15,7 @@ from app.orders.dispatcher_router import router as dispatcher_orders_router
 from app.orders.router import router as store_orders_router
 from app.planning.router import router as plans_router
 from app.receipts.router import router as receipts_router
+from app.sync.router import router as sync_router
 
 
 def create_app() -> FastAPI:
@@ -46,6 +47,7 @@ def create_app() -> FastAPI:
     application.include_router(plans_router, prefix="/api/v1")
     application.include_router(loading_router, prefix="/api/v1")
     application.include_router(delivery_router, prefix="/api/v1")
+    application.include_router(sync_router, prefix="/api/v1")
 
     @application.exception_handler(RequestValidationError)
     async def validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
