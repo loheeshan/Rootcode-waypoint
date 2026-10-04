@@ -3,6 +3,9 @@ import { Tabs } from 'expo-router';
 
 import { AppHeader } from '../../src/components/AppHeader';
 import { AppTabBar } from '../../src/components/AppTabBar';
+import { LoadingProvider } from '../../src/features/loading/LoadingProvider';
+import { shortId } from '../../src/features/loading/format';
+import { useAuth } from '../../src/services/auth';
 
 /**
  * Routes that are not tabs. The value is the tab that should look selected
@@ -28,8 +31,17 @@ const SUB_SCREENS: Record<string, string | null> = {
   'session-expired': null,
 };
 
+/** Header location comes from the signed-in account, not static text. */
+function LoaderHeader() {
+  const { user } = useAuth();
+  const depots = user?.depot_ids ?? [];
+  const location = depots.length ? `Depot ${depots.map(shortId).join(', ')}` : user?.email ?? 'Loader';
+  return <AppHeader role="LOADER" location={location} />;
+}
+
 export default function TabsLayout() {
   return (
+    <LoadingProvider>
     <Tabs
       initialRouteName="today"
       tabBar={(props) => {
@@ -40,9 +52,7 @@ export default function TabsLayout() {
         return <AppTabBar {...props} state={{ ...props.state, routes, index }} />;
       }}
       screenOptions={{
-        header: () => (
-          <AppHeader role="LOADER" location="Peliyagoda · Route Colombo" hasAlerts />
-        ),
+        header: () => <LoaderHeader />,
       }}
     >
       <Tabs.Screen name="today" options={{ title: 'Today' }} />
@@ -54,5 +64,6 @@ export default function TabsLayout() {
         <Tabs.Screen key={name} name={name} options={{ href: null }} />
       ))}
     </Tabs>
+    </LoadingProvider>
   );
 }

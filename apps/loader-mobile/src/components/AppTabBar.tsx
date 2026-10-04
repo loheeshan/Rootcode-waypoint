@@ -25,7 +25,7 @@ export const LOADER_TABS: TabItem[] = [
  */
 interface AppTabBarProps {
   state: { index: number; routes: { key: string; name: string }[] };
-  navigation: { navigate: (...args: any[]) => void };
+  navigation: { navigate: (name: string) => void };
   items?: TabItem[];
 }
 

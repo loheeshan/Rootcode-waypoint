@@ -9,9 +9,9 @@ Never record passwords, tokens or `.env` contents here.
 |---|---|---|---|
 | 1 Demo foundation | `feature/integration-demo-foundation` | `dev` `be6967e` (all backend batches incl. #201) | Done (`aa3add7`, merged #202) |
 | 2 Auth (Store, Loader, Driver) | `feature/integration-demo-auth` | `dev` `68db449` | Done (`978bb94`) |
-| 3 Store web | `feature/integration-store-web` | Step 2 `978bb94` | In review |
+| 3 Store web | `feature/integration-store-web` | Step 2 `978bb94` | Done (`e6b42be`, merged #205) |
 | 4 Dispatcher web | `feature/integration-dispatcher-web` | — | **Deferred**: frontend team still building Dispatcher web |
-| 5 Loader online | `feature/integration-loader-mobile` | Step 3 | Pending |
+| 5 Loader online | `feature/integration-loader-mobile` | `dev` `066dcad` | In review |
 | 6 Driver online | `feature/integration-driver-mobile` | Step 5 | Pending |
 | 7 Loader offline | `feature/integration-loader-offline` | Step 6 | Pending |
 | 8 Driver offline | `feature/integration-driver-offline` | Step 7 | Pending |
@@ -202,6 +202,50 @@ the `operations` scenario with a next-morning test clock):
 | Web typecheck / lint | PASS |
 | Automated browser E2E | NOT ADDED: no E2E runner in the repo (Playwright would need a browser download) |
 
+## Step 5: Loader mobile connected to the API (online)
+
+- Today lists `GET /loader/trips` for today's Colombo date in the account's depots; the header
+  shows the depot from `/me` (no static location or alert dot). Filters use real trip statuses.
+- Checklist shows `GET /trips/{id}/loading`, stops last-first. Loading is per whole order:
+  Loaded, or Problem -> Missing/Damaged with a required note (max 500). No carton counts.
+- Each action gets one `event_id` (expo-crypto UUID), kept across retries of the same action
+  until the server accepts it; a second tap while a request is in flight is ignored.
+- Mark ready sends a `request_id` per `last_event_sequence`. A 409 (stale sequence or finalized
+  trip) reloads the server view and shows the reason; READY is shown only from the server response.
+- Finalized trips show no edit controls. Offline queueing is not part of this step (Step 7):
+  without a connection, actions fail with "Nothing was saved" and nothing is marked done.
+- Responses for a trip that is no longer selected are dropped; a failed refresh keeps the last
+  server view and says it could not refresh (never "Nothing was saved" after a saved event).
+  When an order's outcome is saved, unconfirmed IDs for that order are discarded so they are
+  never replayed later. Today refetches when shown.
+- Fix in both mobile apps: a 401 ends the session only when a token was sent and is still current
+  (a fresh install briefly showed "Your session has expired").
+
+Verification (Pixel 7 emulator, Expo Go, disposable database with a generated test password,
+`published` scenario for today with a 07:00 test clock):
+
+| Check | Result |
+|---|---|
+| Wrong password / Driver account in Loader | PASS: "Email or password is incorrect." / "This account does not have access to this app." |
+| Sign-in -> Today with server trips and depot | PASS: 2 trips, real times/stops/orders |
+| Manifest, double-tap Loaded | PASS: 1 LOADED event stored |
+| Missing with empty note, then with note | PASS: validation message; MISSING saved and listed as exception |
+| Stale ready (event recorded elsewhere, then Mark ready) | PASS: 409, view refreshed, "Loading changed since your last refresh" |
+| Double-tap Mark ready | PASS: one 201, one completion row; READY with server counts |
+| Driver API `GET /driver/trips` | PASS: trip 2 READY |
+| Edit or re-ready finalized trip (API) | PASS: 409 "Loading is finalized" |
+| Loader in another depot (API) | PASS: empty list; view/event 404 |
+| Driver / Store token on Loader endpoints; no token | PASS: 403 / 403 / 401 |
+| Kill and relaunch (remembered) | PASS: Today refetched, trip READY, checklist locked |
+| After Guardian review: switch trip, tap at once | PASS: old manifest cleared; no event sent to the wrong trip |
+| Retry after a network failure on the device | NOT RUN: needs the API stopped mid-request; same-ID replay is covered by backend tests |
+| Loader typecheck / lint, `pnpm test` (25/25), Loader export | PASS |
+| `pnpm typecheck` / lint | Pre-existing Driver errors only (`TurnByTurnCard.tsx` icons; 6 lint errors) |
+
+Not changed: older prototype screens under `src/features/flows`, `dialogs` and `choose-depot`
+(e.g. Profile, Settings, Notifications from the header) still show static text. The Today ->
+Checklist -> Report -> Depart flow no longer links to them.
+
 ## Next step
 
-Step 5 on `feature/integration-loader-mobile` (Step 4 Dispatcher web stays deferred).
+Step 6 on `feature/integration-driver-mobile` (Step 4 Dispatcher web stays deferred).
