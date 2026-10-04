@@ -82,6 +82,53 @@ docker compose exec api python -m app.demo.scenario --stage <stage> [--date YYYY
   `operations` before about 14:00 Colombo time.
 - Each run uses one server time for its events, so fixture timelines have zero durations.
 
+## Demo submission (one-command Docker demo)
+
+`docker compose up` with no `.env` runs the reviewer demo. Reviewer instructions are in
+[DEMO-CREDENTIALS.md](../../DEMO-CREDENTIALS.md).
+
+- **Demo mode:** `APP_ENV=demo` comes from compose defaults only. Copying `.env.example` (`APP_ENV=development`, `DEMO_MODE=false`) turns the demo off.
+- **API container** (`apps/api/docker-entrypoint.sh`), demo mode only:
+  - generates a JWT key once into the `waypoint_demo_api_secrets` volume;
+  - runs `alembic upgrade head`;
+  - runs `python -m app.demo.bootstrap`: demo accounts (password `DEMO_SEED_PASSWORD`, default `WaypointDemo#2026`), demo resources, a demo-only all-day outlet, then today's operations through the real services;
+  - then starts uvicorn.
+  - The bootstrap is idempotent, refuses databases with non-demo accounts, and logs `[demo]` lines.
+- **Today's fixture:** one published plan with 4 trips:
+  - a delivered trip (with a shortfall, one receipt confirmed and one awaiting receipt);
+  - a READY trip;
+  - a failed stop;
+  - a trip not yet loaded;
+  - plus one deferred order and one future Store order.
+  - Same-day orders are inserted as CONFIRMED rows, because the Store API accepts only future dates; missing week fuel is recorded as 0 L.
+  - After about 19:30 Colombo, the next accepted date is planned instead (published, one trip READY, nothing started).
+- **Login cards:** every sign-in screen shows a Demo account card with "Use demo account".
+  - Web: `/api/demo` returns the account only when `APP_ENV=demo` and `DEMO_MODE` is not `false`.
+  - Apps: `EXPO_PUBLIC_DEMO_MODE` and `EXPO_PUBLIC_DEMO_PASSWORD`, set only by the Metro containers.
+- **Metro:** `loader-metro` (8082) and `driver-metro` (8081) reuse the web image and run `expo start` in CI mode. They print `exp://<DEMO_HOST_IP>:<port>` (default `10.0.2.2` for the emulator; set `DEMO_HOST_IP` to the LAN IP for a phone). There is no QR code, because no QR library is installed. Fallback on the host: `corepack pnpm dev:loader` and `corepack pnpm dev:driver`.
+- **Volumes:** the demo uses its own volumes, so `docker compose down -v` resets demo data only. Development keeps its database with `POSTGRES_VOLUME=waypoint_postgres_data` in `.env`.
+
+Verification (2026-10-04/05, Linux container, Docker 29.6.2, Compose v5.3.1):
+
+The image builds used copies of the repo Dockerfiles with this sandbox's TLS-proxy CA added. The copies lived outside the repo; nothing else differed.
+
+| Check | Result |
+|---|---|
+| `docker compose down -v && docker compose up --build` | PASS: all services healthy; banner `=== Waypoint demo is ready ===` |
+| Migrations | PASS: `0014_audit_events (head)` |
+| Demo logins (`check_logins` inside the api container, and curl) | PASS ×4 |
+| Same-day fixture (clean start at 00:00 Colombo, 5 Oct) | PASS: trips COMPLETED 2 / READY 1 / PLANNED 1. Orders: CONFIRMED, PLANNED, LOADING, OUT_FOR_DELIVERY, DELIVERED, RECEIPT_CONFIRMED, DEFERRED (`NO_COMPATIBLE_VEHICLE`). 1 receipt, 1 POD, audit for every action |
+| Late start (23:50 Colombo) | PASS: planned 6 Oct (next accepted date), one trip READY, logged |
+| Restart (`docker compose restart api`) | PASS: "already exist; nothing added"; counts unchanged |
+| Web | PASS: `/store`, `/dispatcher` 200. Demo cards; "Use demo account" signs in through `/api/session`. Store shows all statuses; Dispatcher shows live ops, 3 exceptions, 19 audit rows, the published plan and its deferral |
+| Loader / Driver API for today | PASS: READY, COMPLETED ×2, PLANNED |
+| Metro | PASS: both print `exp://10.0.2.2:8082` / `:8081`. Manifests SDK 57 / 56. Android bundles compile with the demo card and the demo API URL |
+| Backend `ruff`, `mypy`, `pytest` | PASS: 1142 passed, 16 skipped; 4 new bootstrap tests |
+| `pnpm test` / web build / `pnpm export:mobile` | PASS (65 tests) / PASS / PASS |
+| `pnpm lint` / `pnpm typecheck` | Pre-existing driver-mobile errors only |
+| Apps on an emulator or phone (demo card, sign-in, camera, offline) | NOT RUN: no Android emulator here. Steps: DEMO-CREDENTIALS.md "Mobile apps" and the guided check |
+| Windows Docker Desktop and a phone over LAN (`DEMO_HOST_IP`) | NOT RUN: Linux Docker only |
+
 ## Environment and connectivity
 
 | Setting | Where | Value |
